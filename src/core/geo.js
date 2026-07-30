@@ -345,10 +345,7 @@ export class Builder {
       geo.computeBoundingSphere();
       geo.computeBoundingBox();
       const mesh = new THREE.Mesh(geo, mat);
-      // `noShadow` opts a material out of the shadow pass — alpha-cut detail
-      // like blossom sprays is carried by the mass behind it, and paying for
-      // it twice more (shadow, ink) is the whole cost of the technique.
-      mesh.castShadow = castShadow && !mat.transparent && !mat.userData?.noShadow;
+      mesh.castShadow = castShadow && !mat.transparent;
       mesh.receiveShadow = receiveShadow;
       mesh.matrixAutoUpdate = false;
       group.add(mesh);

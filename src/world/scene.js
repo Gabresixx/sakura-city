@@ -11,13 +11,6 @@ import { L, onTracks } from './layout.js';
 
 const FOG = { color: 0xe9e2ee, near: 52, far: 215 };
 
-/** Meshes whose material asked to be left out of the outline pass. */
-function collectNoInk(root) {
-  const out = [];
-  root.traverse((o) => { if (o.isMesh && o.material?.userData?.noInk) out.push(o); });
-  return out;
-}
-
 /**
  * Assembles the world and keeps it running.
  *
@@ -117,12 +110,8 @@ export function buildWorld() {
     scene, sky, crossing, petals, trains, sun,
     colliders: { circles, boxes },
     trackShadow,
-    /**
-     * Objects the ink pass must not see — either they have no meaningful
-     * normals (sky, petals, flat backdrop) or they are alpha-cut detail whose
-     * outlines would be pure noise (blossom sprays).
-     */
-    inkExclude: [sky, petals.mesh, backdrop, ...collectNoInk(sakura)],
+    /** Objects the ink pass must not see — they have no meaningful normals. */
+    inkExclude: [sky, petals.mesh, backdrop],
   };
 }
 

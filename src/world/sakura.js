@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Builder, mulberry32, range, pick } from '../core/geo.js';
 import { toon, RAMP } from '../core/materials.js';
-import { petalSprite, blossomSpray } from '../core/paint.js';
+import { petalSprite } from '../core/paint.js';
 import { C } from '../core/palette.js';
 import { L } from './layout.js';
 
@@ -43,32 +43,6 @@ function branch(b, mats, { from, dir, len, radius, depth, rnd, tips }) {
       len: len * range(rnd, 0.6, 0.78),
       radius: radius * 0.66,
       depth: depth - 1, rnd, tips,
-    });
-  }
-}
-
-/**
- * Scatter alpha-cut flower sprays over the shell of a blossom mass.
- *
- * The low-poly blob gives the canopy its silhouette and its shadow; these give
- * it flowers you can actually pick out. Two quads each, randomly oriented in
- * 3D and double-sided, so the cluster reads from any angle without needing to
- * billboard — billboarding a whole canopy looks like a rotating decal.
- */
-function spray(b, mat, rnd, { p, radius, count, size }) {
-  for (let i = 0; i < count; i++) {
-    const a = rnd() * Math.PI * 2;
-    // Bias upward and outward: the underside of a canopy is mostly in shadow
-    // and mostly hidden, so flowers there are paid for and never seen.
-    const t = Math.acos(1 - 1.55 * rnd());
-    const dx = Math.sin(t) * Math.cos(a);
-    const dy = Math.cos(t);
-    const dz = Math.sin(t) * Math.sin(a);
-    const s = size * range(rnd, 0.75, 1.25);
-    b.plane(mat, {
-      p: [p[0] + dx * radius, p[1] + dy * radius * 0.8, p[2] + dz * radius],
-      s: [s, s, 1],
-      rx: rnd() * Math.PI * 2, ry: rnd() * Math.PI * 2, rz: rnd() * Math.PI * 2,
     });
   }
 }
@@ -128,14 +102,14 @@ function sakuraTree(b, mats, { h = 7.5, seed = 1, lean = 0.1, canopy = 1 }) {
       // Underside clusters take the deep pink so the canopy has a belly.
       const high = q.y > p.y + h * 0.16;
       const mat = high ? pick(rnd, [pinks[0], pinks[1], pinks[1]]) : pick(rnd, [pinks[0], pinks[2]]);
-      const rx = range(rnd, 0.9, 1.5) * canopy;
       b.blob(mat, {
         p: q.toArray(),
-        s: [rx, range(rnd, 0.6, 0.95) * canopy, range(rnd, 0.9, 1.5) * canopy],
+        s: [
+          range(rnd, 0.9, 1.5) * canopy,
+          range(rnd, 0.6, 0.95) * canopy,
+          range(rnd, 0.9, 1.5) * canopy,
+        ],
         seed: Math.floor(rnd() * 8) + 1, jitter: 0.42, w: 6, hs: 4,
-      });
-      spray(b, mats.spray, rnd, {
-        p: q.toArray(), radius: rx * 0.46, count: 3, size: 0.46 * canopy,
       });
     }
   }
@@ -143,14 +117,11 @@ function sakuraTree(b, mats, { h = 7.5, seed = 1, lean = 0.1, canopy = 1 }) {
   for (let i = 0; i < 3; i++) {
     const a = rnd() * Math.PI * 2;
     const rad = h * range(rnd, 0.1, 0.26);
-    const q = [Math.cos(a) * rad, p.y + h * range(rnd, 0.18, 0.34), Math.sin(a) * rad];
-    const rx = range(rnd, 2.2, 3.2) * canopy;
     b.blob(pinks[0], {
-      p: q,
-      s: [rx, range(rnd, 1.4, 2.0) * canopy, range(rnd, 2.2, 3.2) * canopy],
+      p: [Math.cos(a) * rad, p.y + h * range(rnd, 0.18, 0.34), Math.sin(a) * rad],
+      s: [range(rnd, 2.2, 3.2) * canopy, range(rnd, 1.4, 2.0) * canopy, range(rnd, 2.2, 3.2) * canopy],
       seed: i + 2, jitter: 0.38, w: 7, hs: 4,
     });
-    spray(b, mats.spray, rnd, { p: q, radius: rx * 0.47, count: 26, size: 0.5 * canopy });
   }
 }
 
@@ -224,17 +195,7 @@ export function buildSakura() {
       color: C.blossomDeep, ramp: RAMP.bloom, rim: 0.25,
       emissive: 0xc4658f, emissiveIntensity: 0.18,
     }),
-    // Alpha-cut flower sprays. `alphaTest` rather than `transparent` so they
-    // write depth and need no sorting; excluded from the shadow and ink passes
-    // because the blob behind each one already carries both.
-    spray: toon({
-      color: 0xffffff, map: blossomSpray(1), ramp: RAMP.bloom, rim: 0.25,
-      emissive: 0xe8a2be, emissiveIntensity: 0.14,
-      alphaTest: 0.45, side: THREE.DoubleSide,
-    }),
   };
-  mats.spray.userData.noShadow = true;
-  mats.spray.userData.noInk = true;
   const fallen = toon({ color: C.petal, ramp: RAMP.two, rim: 0 });
 
   for (const t of TREES) {
