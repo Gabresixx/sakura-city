@@ -1,0 +1,18 @@
+{
+  "name": "sakura-city",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Anime-styled Japanese suburban street, rendered in real time with Three.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173"
+  },
+  "dependencies": {
+    "three": "0.184.0"
+  },
+  "devDependencies": {
+    "vite": "^7.1.5"
+  }
+}

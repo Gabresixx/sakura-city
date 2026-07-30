@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>桜町 — Sakura City</title>
+<style>
+  :root {
+    --ink: #2b2436;
+    --paper: #fdf6f2;
+    --pink: #e79ab6;
+    --blue: #6f8fc4;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #b9d4ea;
+    font-family: "Yu Gothic", "YuGothic", "Hiragino Kaku Gothic ProN",
+                 "Noto Sans JP", "Meiryo", system-ui, sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  canvas { display: block; touch-action: none; }
+
+  #ui { position: fixed; inset: 0; pointer-events: none; }
+
+  /* ---- loading ---------------------------------------------------------- */
+  #loader {
+    position: fixed; inset: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1.4rem;
+    background: linear-gradient(170deg, #cfe5f6 0%, #f4e3e8 58%, #fdeee2 100%);
+    transition: opacity .9s ease;
+  }
+  #loader.gone { opacity: 0; pointer-events: none; }
+  #loader h1 {
+    margin: 0; font-size: clamp(2.1rem, 7vw, 3.4rem); font-weight: 800;
+    letter-spacing: .22em; text-indent: .22em; color: #46394f;
+  }
+  #loader p { margin: 0; letter-spacing: .18em; font-size: .78rem; color: #7a6a80; }
+  #bar { width: min(280px, 60vw); height: 3px; background: rgba(70,57,79,.16); border-radius: 3px; overflow: hidden; }
+  #bar i { display: block; height: 100%; width: 0%; background: var(--pink); transition: width .3s ease; }
+
+  /* ---- start prompt ----------------------------------------------------- */
+  #start {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1.1rem; background: rgba(30, 24, 38, .40); backdrop-filter: blur(3px);
+    transition: opacity .45s ease; cursor: pointer; pointer-events: auto;
+  }
+  #start.hidden { opacity: 0; pointer-events: none; }
+  #start .card {
+    background: rgba(253, 246, 242, .93);
+    border-radius: 18px; padding: 1.6rem 2.1rem; text-align: center;
+    box-shadow: 0 18px 50px rgba(40, 30, 55, .3);
+    max-width: min(420px, 86vw);
+  }
+  #start h2 { margin: 0 0 .5rem; font-size: 1.15rem; letter-spacing: .1em; }
+  #start .keys { display: grid; grid-template-columns: auto 1fr; gap: .35rem .9rem;
+                 font-size: .82rem; text-align: left; margin: .9rem 0 0; color: #58495f; }
+  kbd {
+    font: inherit; font-size: .74rem; background: #efe4e8; border-radius: 6px;
+    padding: .12rem .45rem; border-bottom: 2px solid #d9c7cf; white-space: nowrap;
+  }
+  #start .go { margin-top: 1.1rem; font-size: .8rem; letter-spacing: .16em; color: var(--pink); font-weight: 700; }
+
+  /* ---- in-world hud ----------------------------------------------------- */
+  #hud {
+    position: fixed; left: 0; right: 0; bottom: 0; padding: 1rem 1.2rem;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    font-size: .7rem; letter-spacing: .12em; color: rgba(255,255,255,.82);
+    text-shadow: 0 1px 6px rgba(35,25,45,.6);
+    opacity: 0; transition: opacity .5s ease;
+  }
+  #hud.on { opacity: 1; }
+  #hud .right { text-align: right; line-height: 1.7; }
+  #hud .tag { opacity: .72; }
+  #dot {
+    position: fixed; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px;
+    border-radius: 50%; background: rgba(255,255,255,.5);
+    box-shadow: 0 0 0 1px rgba(40,30,50,.3); opacity: 0; transition: opacity .4s ease;
+  }
+  #dot.on { opacity: 1; }
+  #toast {
+    position: fixed; left: 50%; top: 12%; transform: translateX(-50%);
+    background: rgba(30,24,38,.72); color: #fdf6f2; padding: .5rem 1.1rem;
+    border-radius: 999px; font-size: .74rem; letter-spacing: .14em;
+    opacity: 0; transition: opacity .35s ease;
+  }
+  #toast.on { opacity: 1; }
+
+  /* One switch, set from JS once the pointer type is known — a width media
+     query gets tablets and small desktop windows wrong in opposite ways. */
+  .touch-keys { display: none; }
+  body.is-touch .desktop-keys { display: none; }
+  body.is-touch .touch-keys { display: grid; }
+  body.is-touch .go.touch-keys { display: block; }
+  body.is-touch #hud .desktop-only { display: none; }
+  /* Keep the HUD clear of the on-screen stick. */
+  body.is-touch #hud { bottom: auto; top: 0; padding-top: max(1rem, env(safe-area-inset-top)); }
+</style>
+</head>
+<body>
+  <div id="ui">
+    <div id="dot"></div>
+    <div id="hud">
+      <div><span class="tag">桜町 二丁目</span> · SAKURA CITY</div>
+      <div class="right">
+        <div class="desktop-only"><kbd>WASD</kbd> 移動 &nbsp; <kbd>Shift</kbd> 走る &nbsp; <kbd>C</kbd> シネマ &nbsp; <kbd>M</kbd> 音</div>
+        <div class="tag" id="status">踏切 — 待機中</div>
+      </div>
+    </div>
+    <div id="toast"></div>
+  </div>
+
+  <div id="start" class="hidden">
+    <div class="card">
+      <h2>桜町へようこそ</h2>
+      <div style="font-size:.8rem;color:#7a6a80;line-height:1.7">
+        春の午後、線路沿いの細い通り。<br />電車が来るまで、少し歩いてみてください。
+      </div>
+      <div class="keys desktop-keys">
+        <kbd>W A S D</kbd><span>歩く</span>
+        <kbd>Shift</kbd><span>走る</span>
+        <kbd>マウス</kbd><span>見回す</span>
+        <kbd>C</kbd><span>シネマティック</span>
+        <kbd>M</kbd><span>サウンド</span>
+        <kbd>Esc</kbd><span>カーソルを戻す</span>
+      </div>
+      <div class="keys touch-keys">
+        <kbd>スティック</kbd><span>歩く</span>
+        <kbd>ドラッグ</kbd><span>見回す</span>
+        <kbd>端末を動かす</kbd><span>ジャイロで見回す</span>
+        <kbd>ボタン</kbd><span>走る · ジャイロ · シネマ</span>
+      </div>
+      <div class="go desktop-keys">クリックしてはじめる</div>
+      <div class="go touch-keys">タップしてはじめる</div>
+    </div>
+  </div>
+
+  <div id="loader">
+    <h1>桜町</h1>
+    <p>SAKURA CITY</p>
+    <div id="bar"><i></i></div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+.vite/
+
+# Held back until the gh token has the `workflow` scope (see README).
+.ci-pending/
