@@ -1,5 +1,7 @@
 # 桜町 — Sakura City
 
+**→ [isk5434.github.io/sakura-city](https://isk5434.github.io/sakura-city/)**
+
 An anime-styled Japanese suburban street, built entirely from code and rendered
 in real time with Three.js. Walk down a narrow 生活道路 beside the railway,
 wait at the 踏切 while a commuter train tears past, and watch the blossom come
@@ -185,3 +187,24 @@ SAKURA.look(0.9, -8.5, Math.PI)  // drop the camera somewhere and point it
 SAKURA.train(1, 22)              // send a train through now
 SAKURA.ink.material.uniforms.uThickness.value = 1.6
 ```
+
+## Deploying
+
+The live site is served from the `gh-pages` branch. To publish a new build:
+
+```bash
+npm run build
+npx gh-pages -d dist        # or push dist/ to gh-pages by hand
+```
+
+There is a GitHub Actions workflow ready to do this automatically, held in
+`.ci-pending/pages.yml`. Pushing a file under `.github/workflows/` needs a token
+with the `workflow` scope, so to switch to automatic deploys:
+
+```bash
+gh auth refresh -s workflow
+mkdir -p .github/workflows && mv .ci-pending/pages.yml .github/workflows/
+git add .github && git commit -m "Add Pages deploy workflow" && git push
+```
+
+Then set the repository's Pages source to **GitHub Actions**.
