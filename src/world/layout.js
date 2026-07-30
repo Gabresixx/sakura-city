@@ -56,3 +56,14 @@ export const ROAD_SPANS = [
 export function inCrossing(z, pad = 0) {
   return z > L.roadEndNear - pad && z < L.roadEndFar + pad;
 }
+
+/**
+ * True when a position is standing on the crossing itself.
+ *
+ * Used to hold trains back: nobody should be sent a 20 m/s EMU while they are
+ * between the rails looking at the ballast.
+ */
+export function onTracks(pos, pad = 1.2) {
+  return pos.z > L.roadEndNear - pad && pos.z < L.roadEndFar + pad
+    && Math.abs(pos.x) < L.crossHalfX + pad;
+}

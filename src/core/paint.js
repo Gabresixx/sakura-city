@@ -497,6 +497,86 @@ export function softDisc(color = '#ffffff') {
   });
 }
 
+/**
+ * A spray of open sakura flowers, alpha-cut.
+ *
+ * Scattered across the canopy on small quads, these are what let you actually
+ * read individual blossom instead of a pink mass. Each flower is five notched
+ * petals around a pale centre with a few stamens — the notch at the petal tip
+ * is the single feature that says 桜 rather than "generic blossom".
+ */
+export function blossomSpray(seed = 1) {
+  return memo(`spray|${seed}`, () => {
+    const S = 256;
+    const c = canvas(S, S);
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, S, S);
+
+    let k = seed * 7919;
+    const rnd = () => ((k = (k * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+
+    const flower = (cx, cy, r, spin, tint) => {
+      for (let i = 0; i < 5; i++) {
+        const a = spin + (i / 5) * Math.PI * 2;
+        const px = cx + Math.cos(a) * r * 0.52;
+        const py = cy + Math.sin(a) * r * 0.52;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(a + Math.PI / 2);
+        // Petal: a rounded fan, notched at the tip.
+        ctx.beginPath();
+        ctx.moveTo(0, r * 0.52);
+        ctx.bezierCurveTo(r * 0.46, r * 0.16, r * 0.34, -r * 0.46, r * 0.10, -r * 0.52);
+        ctx.lineTo(0, -r * 0.34);
+        ctx.lineTo(-r * 0.10, -r * 0.52);
+        ctx.bezierCurveTo(-r * 0.34, -r * 0.46, -r * 0.46, r * 0.16, 0, r * 0.52);
+        ctx.closePath();
+        ctx.fillStyle = tint;
+        ctx.fill();
+        ctx.restore();
+      }
+      // Pale throat and a few stamens.
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.24, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,248,250,0.95)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(214,140,170,0.85)';
+      ctx.lineWidth = Math.max(1, r * 0.035);
+      for (let i = 0; i < 6; i++) {
+        const a = spin * 1.7 + (i / 6) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(a) * r * 0.30, cy + Math.sin(a) * r * 0.30);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.09, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(228,170,120,0.9)';
+      ctx.fill();
+    };
+
+    // A cluster: one or two large flowers with smaller buds packed around them.
+    const tints = ['#fbd3e0', '#ffe6ee', '#f4bcd2', '#fdf0f5'];
+    const spots = [
+      [0.34, 0.34, 0.30], [0.68, 0.30, 0.24], [0.30, 0.70, 0.25],
+      [0.66, 0.68, 0.28], [0.50, 0.50, 0.20],
+    ];
+    for (const [fx, fy, fr] of spots) {
+      flower(S * fx, S * fy, S * fr * (0.85 + rnd() * 0.35),
+        rnd() * Math.PI * 2, tints[Math.floor(rnd() * tints.length)]);
+    }
+    // A couple of unopened buds to break the regularity.
+    for (let i = 0; i < 3; i++) {
+      const bx = S * (0.12 + rnd() * 0.76), by = S * (0.12 + rnd() * 0.76);
+      ctx.beginPath();
+      ctx.arc(bx, by, S * (0.030 + rnd() * 0.022), 0, Math.PI * 2);
+      ctx.fillStyle = '#eaa8c2';
+      ctx.fill();
+    }
+    return finish(c);
+  });
+}
+
 /** A single five-lobed sakura petal, alpha-cut. */
 export function petalSprite() {
   return memo('petal', () => {

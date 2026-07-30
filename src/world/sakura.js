@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Builder, mulberry32, range, pick } from '../core/geo.js';
 import { toon, RAMP } from '../core/materials.js';
-import { petalSprite } from '../core/paint.js';
+import { petalSprite, blossomSpray } from '../core/paint.js';
 import { C } from '../core/palette.js';
 import { L } from './layout.js';
 
@@ -43,6 +43,32 @@ function branch(b, mats, { from, dir, len, radius, depth, rnd, tips }) {
       len: len * range(rnd, 0.6, 0.78),
       radius: radius * 0.66,
       depth: depth - 1, rnd, tips,
+    });
+  }
+}
+
+/**
+ * Scatter alpha-cut flower sprays over the shell of a blossom mass.
+ *
+ * The low-poly blob gives the canopy its silhouette and its shadow; these give
+ * it flowers you can actually pick out. Two quads each, randomly oriented in
+ * 3D and double-sided, so the cluster reads from any angle without needing to
+ * billboard — billboarding a whole canopy looks like a rotating decal.
+ */
+function spray(b, mat, rnd, { p, radius, count, size }) {
+  for (let i = 0; i < count; i++) {
+    const a = rnd() * Math.PI * 2;
+    // Bias upward and outward: the underside of a canopy is mostly in shadow
+    // and mostly hidden, so flowers there are paid for and never seen.
+    const t = Math.acos(1 - 1.55 * rnd());
+    const dx = Math.sin(t) * Math.cos(a);
+    const dy = Math.cos(t);
+    const dz = Math.sin(t) * Math.sin(a);
+    const s = size * range(rnd, 0.75, 1.25);
+    b.plane(mat, {
+      p: [p[0] + dx * radius, p[1] + dy * radius * 0.8, p[2] + dz * radius],
+      s: [s, s, 1],
+      rx: rnd() * Math.PI * 2, ry: rnd() * Math.PI * 2, rz: rnd() * Math.PI * 2,
     });
   }
 }
@@ -102,14 +128,14 @@ function sakuraTree(b, mats, { h = 7.5, seed = 1, lean = 0.1, canopy = 1 }) {
       // Underside clusters take the deep pink so the canopy has a belly.
       const high = q.y > p.y + h * 0.16;
       const mat = high ? pick(rnd, [pinks[0], pinks[1], pinks[1]]) : pick(rnd, [pinks[0], pinks[2]]);
+      const rx = range(rnd, 0.9, 1.5) * canopy;
       b.blob(mat, {
         p: q.toArray(),
-        s: [
-          range(rnd, 0.9, 1.5) * canopy,
-          range(rnd, 0.6, 0.95) * canopy,
-          range(rnd, 0.9, 1.5) * canopy,
-        ],
+        s: [rx, range(rnd, 0.6, 0.95) * canopy, range(rnd, 0.9, 1.5) * canopy],
         seed: Math.floor(rnd() * 8) + 1, jitter: 0.42, w: 6, hs: 4,
+      });
+      spray(b, mats.spray, rnd, {
+        p: q.toArray(), radius: rx * 0.46, count: 3, size: 0.46 * canopy,
       });
     }
   }
@@ -117,11 +143,14 @@ function sakuraTree(b, mats, { h = 7.5, seed = 1, lean = 0.1, canopy = 1 }) {
   for (let i = 0; i < 3; i++) {
     const a = rnd() * Math.PI * 2;
     const rad = h * range(rnd, 0.1, 0.26);
+    const q = [Math.cos(a) * rad, p.y + h * range(rnd, 0.18, 0.34), Math.sin(a) * rad];
+    const rx = range(rnd, 2.2, 3.2) * canopy;
     b.blob(pinks[0], {
-      p: [Math.cos(a) * rad, p.y + h * range(rnd, 0.18, 0.34), Math.sin(a) * rad],
-      s: [range(rnd, 2.2, 3.2) * canopy, range(rnd, 1.4, 2.0) * canopy, range(rnd, 2.2, 3.2) * canopy],
+      p: q,
+      s: [rx, range(rnd, 1.4, 2.0) * canopy, range(rnd, 2.2, 3.2) * canopy],
       seed: i + 2, jitter: 0.38, w: 7, hs: 4,
     });
+    spray(b, mats.spray, rnd, { p: q, radius: rx * 0.47, count: 26, size: 0.5 * canopy });
   }
 }
 
@@ -138,30 +167,40 @@ function fallenPetals(b, mat, rnd, { x, z, radius, count }) {
   }
 }
 
+/**
+ * Where the trees go.
+ *
+ * Two constraints that are easy to violate and obvious once violated: nothing
+ * may stand inside the track bed, and nothing may stand inside a building plot.
+ * The plot band is roughly |x| 5–13, so the line-side rows are kept beyond it,
+ * and every street tree sits in a measured gap between two plots.
+ */
 const TREES = [
-  // Lining the railway — this is the pink band you see across the whole view.
+  // Lining the railway — the pink band across the back of the view. Kept past
+  // |x| > 14 so they clear the buildings that front the street.
   ...Array.from({ length: 9 }, (_, i) => ({
     x: -46 + i * 11.5, z: L.railZ + 5.6, h: 8.2, seed: 200 + i,
-  })).filter((t) => Math.abs(t.x) > 7),
+  })).filter((t) => Math.abs(t.x) > 14),
   ...Array.from({ length: 8 }, (_, i) => ({
     x: -42 + i * 11.5, z: L.railZ - 5.9, h: 7.6, seed: 300 + i,
-  })).filter((t) => Math.abs(t.x) > 7),
+  })).filter((t) => Math.abs(t.x) > 14),
 
   // Leaning over the street from the gaps between plots.
-  { x: 7.4, z: -33.5, h: 8.6, seed: 401, lean: 0.22 },
-  { x: -7.0, z: -45.5, h: 8.0, seed: 402, lean: 0.2 },
-  { x: 7.2, z: -23.0, h: 7.4, seed: 403, lean: 0.24 },
-  { x: -6.8, z: -14.2, h: 8.8, seed: 404, lean: 0.26 },
-  { x: 7.6, z: -3.0, h: 7.8, seed: 405, lean: 0.2 },
-  { x: -7.4, z: 5.6, h: 8.4, seed: 406, lean: 0.24 },
-  { x: 7.0, z: 17.5, h: 7.2, seed: 407, lean: 0.18 },
-  { x: -7.2, z: 22.5, h: 7.6, seed: 408, lean: 0.2 },
-  { x: 7.4, z: 36.5, h: 8.2, seed: 409, lean: 0.22 },
-  { x: -7.0, z: 47.0, h: 7.8, seed: 410, lean: 0.2 },
+  { x: 7.4, z: -31.2, h: 8.6, seed: 401, lean: 0.22 },   // gap −32.25…−30.25
+  { x: -7.0, z: -45.9, h: 8.0, seed: 402, lean: 0.2 },   // gap −47…−44.9
+  { x: 7.2, z: -13.3, h: 7.4, seed: 403, lean: 0.24 },   // gap −14.8…−11.8
+  { x: -6.8, z: -14.0, h: 8.8, seed: 404, lean: 0.26 },  // gap −15.5…−12.4
+  { x: 7.6, z: -3.8, h: 7.8, seed: 405, lean: 0.2 },     // gap −5.2…−2.4
+  { x: -7.4, z: 5.6, h: 8.4, seed: 406, lean: 0.24 },    // gap 4.2…7
+  { x: 7.4, z: 35.6, h: 8.2, seed: 409, lean: 0.22 },    // gap 34.1…37
+  { x: -7.0, z: 47.0, h: 7.8, seed: 410, lean: 0.2 },    // gap 45.7…48.5
 
-  // The two at the crossing corners, framing the shot down the road.
-  { x: -6.4, z: L.gateNear - 3.2, h: 6.6, seed: 501, lean: 0.3, canopy: 0.9 },
-  { x: 6.6, z: L.gateFar + 3.6, h: 6.8, seed: 502, lean: 0.3, canopy: 0.9 },
+  // Framing the crossing. Both sit in the open ground between the last plot
+  // and the line-side fence — outside the ballast, outside the fence. The west
+  // one is deliberately small: that gap is only 1.2m, and a full-size trunk
+  // would push into the house behind it.
+  { x: -6.6, z: 14.6, h: 5.8, seed: 501, lean: 0.3, canopy: 0.78 },
+  { x: 6.8, z: 25.8, h: 6.8, seed: 502, lean: 0.3, canopy: 0.9 },
 ];
 
 export function buildSakura() {
@@ -185,7 +224,17 @@ export function buildSakura() {
       color: C.blossomDeep, ramp: RAMP.bloom, rim: 0.25,
       emissive: 0xc4658f, emissiveIntensity: 0.18,
     }),
+    // Alpha-cut flower sprays. `alphaTest` rather than `transparent` so they
+    // write depth and need no sorting; excluded from the shadow and ink passes
+    // because the blob behind each one already carries both.
+    spray: toon({
+      color: 0xffffff, map: blossomSpray(1), ramp: RAMP.bloom, rim: 0.25,
+      emissive: 0xe8a2be, emissiveIntensity: 0.14,
+      alphaTest: 0.45, side: THREE.DoubleSide,
+    }),
   };
+  mats.spray.userData.noShadow = true;
+  mats.spray.userData.noInk = true;
   const fallen = toon({ color: C.petal, ramp: RAMP.two, rim: 0 });
 
   for (const t of TREES) {

@@ -84,6 +84,29 @@
     padding: .1rem .42rem; border-bottom: 2px solid #d9c7cf; white-space: nowrap;
   }
 
+  /* ---- start gate (touch only) ------------------------------------------
+     Kept for phones, where a first tap is needed anyway to unlock audio and
+     to ask iOS for the motion sensor. `display:none` on desktop rather than
+     just hidden, so it can never intercept the click that captures the
+     cursor — which is exactly how it broke before. */
+  #start { display: none; }
+  body.is-touch #start {
+    position: fixed; inset: 0; z-index: 25;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(30, 24, 38, .34); backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    transition: opacity .45s ease; pointer-events: auto;
+  }
+  body.is-touch #start.hidden { opacity: 0; pointer-events: none; }
+  #start .card {
+    background: rgba(253,246,242,.93); border-radius: 18px;
+    padding: 1.5rem 2.2rem; text-align: center;
+    box-shadow: 0 18px 50px rgba(40,30,55,.3);
+  }
+  #start h2 { margin: 0; font-size: 1.2rem; letter-spacing: .18em; }
+  #start .go { margin-top: .9rem; font-size: .8rem; letter-spacing: .18em;
+               color: var(--pink); font-weight: 700; }
+
   /* Prompt to capture the cursor. Only on desktop, only while unlocked. */
   #click-hint {
     position: fixed; left: 50%; bottom: 12%; transform: translateX(-50%);
@@ -144,6 +167,13 @@
     <div id="click-hint">クリックして視点操作</div>
   </div>
 
+  <div id="start">
+    <div class="card">
+      <h2>桜町</h2>
+      <div class="go">タッチしてスタート</div>
+    </div>
+  </div>
+
   <div id="help" class="open">
     <button id="help-toggle" type="button" aria-expanded="true" aria-controls="help-panel">
       操作
@@ -166,7 +196,6 @@
         <dt><kbd>ボタン</kbd></dt><dd>走る · ジャイロ · シネマ</dd>
       </dl>
       <p class="foot desktop-keys"><kbd>H</kbd> でこのパネルを開閉</p>
-      <p class="foot touch-keys">右上の「操作」で開閉</p>
     </div>
   </div>
 

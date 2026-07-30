@@ -16,6 +16,7 @@ const toastEl = document.getElementById('toast');
 const help = document.getElementById('help');
 const helpToggle = document.getElementById('help-toggle');
 const clickHint = document.getElementById('click-hint');
+const startGate = document.getElementById('start');
 
 /**
  * Yield to the browser so the loading bar can actually paint.
@@ -144,9 +145,12 @@ async function main() {
   }
 
   // Always run it, even when the stored state matches the markup's default —
-  // otherwise the body class that CSS keys off never gets set.
+  // otherwise the body class that CSS keys off never gets set. On a phone it
+  // starts folded: the start card should be the only thing on screen, and the
+  // stick and buttons explain themselves.
   const firstVisit = read(HELP_KEY) === null;
-  setHelp(read(HELP_KEY) !== '0', false);
+  const stored = read(HELP_KEY);
+  setHelp(stored === null ? !touch : stored !== '0', false);
 
   helpToggle.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -172,16 +176,16 @@ async function main() {
   };
 
   if (touch) {
-    // No pointer lock on a phone, so the first tap on the world is the user
-    // gesture iOS requires before it will hand over the motion sensor.
-    const firstTap = async () => {
+    // The start card is the user gesture iOS requires before it will hand over
+    // the motion sensor, and the one Safari requires before it will play audio.
+    startGate.addEventListener('click', async () => {
+      startGate.classList.add('hidden');
       audio.start();
       const ok = await gyro.enable();
       touchUI?.say(ok
         ? '端末を動かして見回す · 左のスティックで移動'
         : 'ドラッグで見回す · 左のスティックで移動', 4200);
-    };
-    window.addEventListener('pointerdown', firstTap, { once: true });
+    }, { once: true });
   }
 
   player.onGyroChange = (on) => touchUI?.setGyroActive(on);
@@ -289,7 +293,7 @@ async function main() {
 
   // Handy for tuning by eye from the console.
   window.SAKURA = {
-    renderer, scene, camera, world, player, ink, grade, composer, audio,
+    renderer, scene, camera, world, player, ink, grade, composer, audio, director,
     forceRender: false,
     /** Drop the camera somewhere and point it, for framing shots. */
     look(x, z, yaw, pitch = 0, y = L.eye) {

@@ -7,9 +7,16 @@ import { createTrain } from './train.js';
 import { buildBuildings } from './buildings.js';
 import { buildSakura, createPetals } from './sakura.js';
 import { buildProps } from './props.js';
-import { L } from './layout.js';
+import { L, onTracks } from './layout.js';
 
 const FOG = { color: 0xe9e2ee, near: 52, far: 215 };
+
+/** Meshes whose material asked to be left out of the outline pass. */
+function collectNoInk(root) {
+  const out = [];
+  root.traverse((o) => { if (o.isMesh && o.material?.userData?.noInk) out.push(o); });
+  return out;
+}
 
 /**
  * Assembles the world and keeps it running.
@@ -110,8 +117,12 @@ export function buildWorld() {
     scene, sky, crossing, petals, trains, sun,
     colliders: { circles, boxes },
     trackShadow,
-    /** Objects the ink pass must not see — they have no meaningful normals. */
-    inkExclude: [sky, petals.mesh, backdrop],
+    /**
+     * Objects the ink pass must not see — either they have no meaningful
+     * normals (sky, petals, flat backdrop) or they are alpha-cut detail whose
+     * outlines would be pure noise (blossom sprays).
+     */
+    inkExclude: [sky, petals.mesh, backdrop, ...collectNoInk(sakura)],
   };
 }
 
@@ -132,10 +143,18 @@ export class Director {
   }
 
   update(dt, camera) {
-    const { crossing, trains } = this.world;
+    const { trains } = this.world;
 
     this.timer -= dt;
     if (this.timer <= 0) {
+      // Safety interlock: never dispatch while someone is standing on the
+      // crossing. Retry shortly rather than losing the slot, so stepping off
+      // is followed by a train a few seconds later instead of a long silence.
+      if (onTracks(camera.position)) {
+        this.timer = 2.5;
+        this._step(dt, camera);
+        return;
+      }
       const free = trains.find((t) => !t.active);
       if (free) {
         const dir = this.flip % 2 === 0 ? 1 : -1;
@@ -164,6 +183,12 @@ export class Director {
       }
       this.timer = 26 + Math.random() * 22;
     }
+    this._step(dt, camera);
+  }
+
+  /** Advance whatever is already running: trains, audio, and the crossing. */
+  _step(dt, camera) {
+    const { crossing, trains } = this.world;
 
     // The crossing stays armed while any train is inbound or still clearing.
     let blocking = false;

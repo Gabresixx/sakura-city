@@ -514,13 +514,20 @@ export function buildProps() {
   }
 
   // ---- bicycles -----------------------------------------------------------
+  // A bike is ~1.8m long and ~0.6m wide. Parked with its length running along
+  // the pavement they overlap each other at any sane spacing, so they stand
+  // nose-in to the buildings instead — length across the footway, spaced by
+  // their width. Which is how bicycles are actually parked.
+  const NOSE_IN_E = 0;            // local +X is the front wheel
+  const NOSE_IN_W = Math.PI;
   const bikes = [
-    [POLE_X - 0.55, 12.6, -Math.PI / 2 + 0.1, m.bike],
-    [POLE_X - 0.55, 13.4, -Math.PI / 2 - 0.06, m.bike2],
-    [-(POLE_X - 0.5), -12.4, Math.PI / 2 + 0.12, m.bike2],
-    [-(POLE_X - 0.5), -13.2, Math.PI / 2, m.bike],
-    [POLE_X - 0.5, -30.5, -Math.PI / 2 + 0.2, m.bike],
-    [-(POLE_X - 0.5), 33.5, Math.PI / 2 - 0.1, m.bike2],
+    [4.15, 12.45, NOSE_IN_E + 0.05, m.bike],
+    [4.15, 13.10, NOSE_IN_E - 0.04, m.bike2],
+    [4.15, 13.78, NOSE_IN_E + 0.07, m.bike],
+    [-4.15, -12.35, NOSE_IN_W + 0.06, m.bike2],
+    [-4.15, -13.02, NOSE_IN_W - 0.05, m.bike],
+    [4.12, -30.6, NOSE_IN_E + 0.09, m.bike],
+    [-4.12, 32.4, NOSE_IN_W - 0.07, m.bike2],
   ];
   bikes.forEach(([x, z, ry, frame], i) => {
     b.at({ p: [x, PY, z], ry }, () => bicycle(b, m, { frame, seed: i + 1 }));
