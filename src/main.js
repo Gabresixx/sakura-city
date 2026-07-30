@@ -9,11 +9,13 @@ import { L } from './world/layout.js';
 
 const loader = document.getElementById('loader');
 const bar = document.querySelector('#bar i');
-const startPanel = document.getElementById('start');
 const hud = document.getElementById('hud');
 const dot = document.getElementById('dot');
 const statusEl = document.getElementById('status');
 const toastEl = document.getElementById('toast');
+const help = document.getElementById('help');
+const helpToggle = document.getElementById('help-toggle');
+const clickHint = document.getElementById('click-hint');
 
 /**
  * Yield to the browser so the loading bar can actually paint.
@@ -94,9 +96,11 @@ async function main() {
   await stage(100, 'ready', () => {});
 
   // ---- ui wiring ----------------------------------------------------------
+  // No gate: the scene is already there, so show it. The controls live in a
+  // corner panel you can fold away instead of a modal over the view.
   loader.classList.add('gone');
-  startPanel.classList.remove('hidden');
   setTimeout(() => loader.remove(), 1000);
+  hud.classList.add('on');
 
   const touch = isTouchDevice();
   document.body.classList.toggle('is-touch', touch);
@@ -119,34 +123,65 @@ async function main() {
       onCinematic: () => { player.toggleCinematic(); return player.cinematic; },
     });
     player.setTouchSource(touchUI.state);
+    touchUI.show();
+  } else {
+    clickHint.classList.add('on');
   }
 
-  /** Enter the scene. Driven by pointer lock on desktop, by a tap on touch. */
-  function enter() {
-    startPanel.classList.add('hidden');
-    hud.classList.add('on');
-    dot.classList.toggle('on', !touch);
+  // ---- help panel ---------------------------------------------------------
+  const HELP_KEY = 'sakura.help';
+  const read = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+  const write = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
+
+  /** `remember: false` for automatic folds, so they never overwrite a choice. */
+  function setHelp(open, remember = true) {
+    help.classList.toggle('open', open);
+    // On a phone the panel is nearly as wide as the screen, so the HUD hides
+    // behind it. The body class lets CSS fade the HUD out for the duration.
+    document.body.classList.toggle('help-open', open);
+    helpToggle.setAttribute('aria-expanded', String(open));
+    if (remember) write(HELP_KEY, open ? '1' : '0');
+  }
+
+  // Always run it, even when the stored state matches the markup's default —
+  // otherwise the body class that CSS keys off never gets set.
+  const firstVisit = read(HELP_KEY) === null;
+  setHelp(read(HELP_KEY) !== '0', false);
+
+  helpToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setHelp(!help.classList.contains('open'));
+  });
+  // Clicking the panel itself must not fall through and capture the cursor.
+  help.addEventListener('click', (e) => e.stopPropagation());
+
+  // ---- entering / leaving pointer lock ------------------------------------
+  let foldedOnce = false;
+  player.onLockChange = (locked) => {
+    dot.classList.toggle('on', locked);
+    clickHint.classList.toggle('on', !locked && !touch);
+    if (!locked) return;
     audio.start();
-    touchUI?.show();
-  }
-  function leave() {
-    startPanel.classList.remove('hidden');
-    hud.classList.remove('on');
-    dot.classList.remove('on');
-  }
-
-  player.onLockChange = (locked) => { if (locked) enter(); else if (!touch) leave(); };
+    // On a first visit the panel is open because nobody chose that, so fold it
+    // once you actually start exploring. Never on a return visit — by then the
+    // open state is a decision, and overriding it would be rude.
+    if (firstVisit && !foldedOnce && help.classList.contains('open')) {
+      foldedOnce = true;
+      setHelp(false, false);
+    }
+  };
 
   if (touch) {
-    // No pointer lock on a phone, so the tap that starts the scene is also the
-    // user gesture iOS requires before it will hand over the motion sensor.
-    startPanel.addEventListener('click', async () => {
-      enter();
+    // No pointer lock on a phone, so the first tap on the world is the user
+    // gesture iOS requires before it will hand over the motion sensor.
+    const firstTap = async () => {
+      audio.start();
       const ok = await gyro.enable();
       touchUI?.say(ok
         ? '端末を動かして見回す · 左のスティックで移動'
         : 'ドラッグで見回す · 左のスティックで移動', 4200);
-    }, { once: false });
+    };
+    window.addEventListener('pointerdown', firstTap, { once: true });
   }
 
   player.onGyroChange = (on) => touchUI?.setGyroActive(on);
@@ -157,6 +192,7 @@ async function main() {
 
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyM') toast(audio.toggle() ? 'サウンド ON' : 'サウンド OFF');
+    if (e.code === 'KeyH') setHelp(!help.classList.contains('open'));
   });
 
   // Re-zero the heading when the phone is rotated, or the world ends up

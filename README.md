@@ -25,14 +25,21 @@ npm run dev      # http://localhost:5180
 | mouse | look (click to capture the cursor) |
 | `C` | cinematic dolly |
 | `M` | sound on / off |
+| `H` | show / hide the controls panel |
 | `Esc` | release the cursor |
+
+There is no start screen. The controls live in a fold-away panel in the top-right
+corner, and its open state is remembered. A modal gate was the wrong shape here
+twice over: it covered the scene it was describing, and — sitting over the whole
+viewport with pointer events on — it swallowed the very click meant to capture
+the cursor.
 
 **Phone / tablet**
 
 A translucent stick appears bottom-left for walking, with run, gyro and
 cinematic buttons bottom-right. Drag anywhere else to look around.
 
-Tapping to start also asks for the motion sensor, and with it granted you look
+The first tap also asks for the motion sensor, and with it granted you look
 around by **moving the phone itself** — hold it up and turn, and the street
 turns with you. Two things make that comfortable rather than seasick:
 
