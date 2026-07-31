@@ -16,6 +16,7 @@ const gateCard = document.getElementById('gate-card');
 const dot = document.getElementById('dot');
 const toastEl = document.getElementById('toast');
 const clickHint = document.getElementById('click-hint');
+const uiToggle = document.getElementById('ui-toggle');
 
 /**
  * Yield to the browser between build stages.
@@ -271,8 +272,15 @@ async function main() {
     reveal.start(() => {
       reveal.enabled = false; // zero cost from here on
       gate.remove();
+      // Only appears once you're actually in the world — matches the same
+      // "don't show it until it does something" rule the touch stick follows.
+      uiToggle.classList.add('on');
     });
   }, { once: true });
+
+  uiToggle.addEventListener('click', () => {
+    document.body.classList.toggle('ui-hidden');
+  });
 
   // Handy for tuning by eye from the console.
   window.SAKURA = {
