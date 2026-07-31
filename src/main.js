@@ -127,9 +127,8 @@ async function main() {
     // everywhere" is exactly the kind of assumption not worth relying on for
     // something a phone's browser has to get right through backdrop-filter
     // and a WebGL canvas at once. Simplest fix: it just isn't there yet.
-  } else {
-    clickHint.classList.add('on');
   }
+  // clickHint (desktop) is the same story — see the gate's onComplete below.
 
   // ---- entering / leaving pointer lock ------------------------------------
   player.onLockChange = (locked) => {
@@ -275,6 +274,11 @@ async function main() {
       // Only appears once you're actually in the world — matches the same
       // "don't show it until it does something" rule the touch stick follows.
       uiToggle.classList.add('on');
+      // Pointer lock is usually already granted well before the reveal
+      // finishes, so onLockChange has typically already run by now; this
+      // just covers the case where it hasn't (or was denied) so the hint
+      // still shows up rather than never appearing at all.
+      clickHint.classList.toggle('on', !player.locked && !touch);
     });
   }, { once: true });
 
