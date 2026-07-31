@@ -24,22 +24,66 @@
 
   #ui { position: fixed; inset: 0; pointer-events: none; }
 
-  /* ---- loading ---------------------------------------------------------- */
-  #loader {
+  /* ---- entrance -----------------------------------------------------------
+     One screen, one transition. The old design had two: a loading screen
+     that faded out, then a "tap to start" modal that faded out separately —
+     two hard cuts before you ever saw the street. This is a single card that
+     sits in front of a world which is already there and already moving; the
+     only thing that changes is a line of text, and then rain. `#gate-bg` is
+     the paper-gradient backdrop, drawn again in WebGL by reveal.js so the
+     handover between the two has nothing to visibly cross. */
+  #gate {
     position: fixed; inset: 0; z-index: 30;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 1.4rem;
-    background: linear-gradient(170deg, #cfe5f6 0%, #f4e3e8 58%, #fdeee2 100%);
-    transition: opacity .9s ease;
+    display: flex; align-items: center; justify-content: center;
+    /* Blocks the world underneath — including the touch stick, which sits at
+       a lower z-index — for the entire wait. Only `.leaving` lets go of
+       input, and by then the card itself has already faded to nothing. */
+    pointer-events: auto;
   }
-  #loader.gone { opacity: 0; pointer-events: none; }
-  #loader h1 {
+  #gate.ready { cursor: pointer; }
+  #gate.leaving { pointer-events: none; }
+
+  #gate-bg {
+    position: absolute; inset: 0;
+    background: linear-gradient(170deg, #cfe5f6 0%, #f4e3e8 58%, #fdeee2 100%);
+    transition: opacity .7s ease;
+  }
+  #gate.ready #gate-bg { opacity: 0; }
+
+  /* A handful of petals drifting down behind the card text — cheap (pure
+     CSS), and it keeps the entrance from reading as a static splash image. */
+  .gate-petal {
+    position: absolute; top: -6%; width: 10px; height: 10px; border-radius: 60% 5% 60% 5%;
+    background: rgba(231,154,182,.55); opacity: 0;
+    animation: petal-fall linear infinite;
+  }
+  @keyframes petal-fall {
+    0%   { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+    8%   { opacity: .8; }
+    92%  { opacity: .55; }
+    100% { transform: translate(var(--drift, 40px), 112vh) rotate(300deg); opacity: 0; }
+  }
+
+  #gate-card {
+    position: relative; text-align: center; transition: opacity .4s ease, transform .4s ease;
+  }
+  #gate.leaving #gate-card { opacity: 0; transform: translateY(-8px); }
+  #gate-card h1 {
     margin: 0; font-size: clamp(2.1rem, 7vw, 3.4rem); font-weight: 800;
     letter-spacing: .22em; text-indent: .22em; color: #46394f;
   }
-  #loader p { margin: 0; letter-spacing: .18em; font-size: .78rem; color: #7a6a80; }
-  #bar { width: min(280px, 60vw); height: 3px; background: rgba(70,57,79,.16); border-radius: 3px; overflow: hidden; }
-  #bar i { display: block; height: 100%; width: 0%; background: var(--pink); transition: width .3s ease; }
+  #gate-card .sub {
+    margin: .5rem 0 0; letter-spacing: .3em; font-size: .78rem; color: #7a6a80;
+  }
+  #gate-cta {
+    margin-top: 1.6rem; font-size: .76rem; letter-spacing: .2em; color: #9385a0;
+    animation: gate-breathe 2.6s ease-in-out infinite;
+  }
+  #gate.ready #gate-cta {
+    color: var(--pink); font-weight: 700; letter-spacing: .34em;
+    animation: gate-breathe 1.8s ease-in-out infinite;
+  }
+  @keyframes gate-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
 
   /* ---- help tab ---------------------------------------------------------
      A modal gate was the wrong shape for this: it covered the scene it was
@@ -84,29 +128,6 @@
     padding: .1rem .42rem; border-bottom: 2px solid #d9c7cf; white-space: nowrap;
   }
 
-  /* ---- start gate (touch only) ------------------------------------------
-     Kept for phones, where a first tap is needed anyway to unlock audio and
-     to ask iOS for the motion sensor. `display:none` on desktop rather than
-     just hidden, so it can never intercept the click that captures the
-     cursor — which is exactly how it broke before. */
-  #start { display: none; }
-  body.is-touch #start {
-    position: fixed; inset: 0; z-index: 25;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(30, 24, 38, .34); backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(3px);
-    transition: opacity .45s ease; pointer-events: auto;
-  }
-  body.is-touch #start.hidden { opacity: 0; pointer-events: none; }
-  #start .card {
-    background: rgba(253,246,242,.93); border-radius: 18px;
-    padding: 1.5rem 2.2rem; text-align: center;
-    box-shadow: 0 18px 50px rgba(40,30,55,.3);
-  }
-  #start h2 { margin: 0; font-size: 1.2rem; letter-spacing: .18em; }
-  #start .go { margin-top: .9rem; font-size: .8rem; letter-spacing: .18em;
-               color: var(--pink); font-weight: 700; }
-
   /* Prompt to capture the cursor. Only on desktop, only while unlocked. */
   #click-hint {
     position: fixed; left: 50%; bottom: 12%; transform: translateX(-50%);
@@ -142,11 +163,13 @@
   #toast.on { opacity: 1; }
 
   /* One switch, set from JS once the pointer type is known — a width media
-     query gets tablets and small desktop windows wrong in opposite ways. */
-  .touch-keys { display: none; }
-  body.is-touch .desktop-keys { display: none; }
-  body.is-touch dl.touch-keys { display: grid; }
-  body.is-touch p.touch-keys { display: block; }
+     query gets tablets and small desktop windows wrong in opposite ways.
+     `#help-panel dl` sets display:grid with ID-level specificity, so the
+     show/hide rules here have to match that specificity or they lose. */
+  #help-panel .touch-keys { display: none; }
+  body.is-touch #help-panel .desktop-keys { display: none; }
+  body.is-touch #help-panel dl.touch-keys { display: grid; }
+  body.is-touch #help-panel p.touch-keys { display: block; }
   /* On a phone the stick owns the bottom of the screen, so the HUD moves up —
      stacked on the left, clear of the help button in the opposite corner. */
   body.is-touch #hud {
@@ -165,13 +188,6 @@
     </div>
     <div id="toast"></div>
     <div id="click-hint">クリックして視点操作</div>
-  </div>
-
-  <div id="start">
-    <div class="card">
-      <h2>桜町</h2>
-      <div class="go">タッチしてスタート</div>
-    </div>
   </div>
 
   <div id="help" class="open">
@@ -199,10 +215,19 @@
     </div>
   </div>
 
-  <div id="loader">
-    <h1>桜町</h1>
-    <p>SAKURA CITY</p>
-    <div id="bar"><i></i></div>
+  <div id="gate">
+    <div id="gate-bg"></div>
+    <div class="gate-petal" style="left:12%; width:9px; height:9px; --drift:60px; animation-duration:9s; animation-delay:.2s"></div>
+    <div class="gate-petal" style="left:26%; width:7px; height:7px; --drift:-40px; animation-duration:7.5s; animation-delay:1.6s"></div>
+    <div class="gate-petal" style="left:41%; width:11px; height:11px; --drift:30px; animation-duration:10.5s; animation-delay:.9s"></div>
+    <div class="gate-petal" style="left:58%; width:8px; height:8px; --drift:-55px; animation-duration:8.2s; animation-delay:2.4s"></div>
+    <div class="gate-petal" style="left:73%; width:10px; height:10px; --drift:45px; animation-duration:9.8s; animation-delay:.1s"></div>
+    <div class="gate-petal" style="left:87%; width:8px; height:8px; --drift:-30px; animation-duration:7s; animation-delay:1.3s"></div>
+    <div id="gate-card">
+      <h1>桜町</h1>
+      <p class="sub">SAKURA CITY</p>
+      <p id="gate-cta">支度をしています</p>
+    </div>
   </div>
 
   <script type="module" src="/src/main.js"></script>

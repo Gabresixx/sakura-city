@@ -1,14 +1,16 @@
 import * as THREE from 'three';
 import { buildWorld, Director } from './world/scene.js';
 import { createComposer } from './core/post.js';
+import { createEntranceCard } from './core/reveal.js';
 import { Explorer } from './player/controls.js';
 import { Gyro } from './player/gyro.js';
 import { createTouchUI, isTouchDevice } from './ui/touch.js';
 import { Audio } from './core/audio.js';
 import { L } from './world/layout.js';
 
-const loader = document.getElementById('loader');
-const bar = document.querySelector('#bar i');
+const gate = document.getElementById('gate');
+const gateCard = document.getElementById('gate-card');
+const gateCta = document.getElementById('gate-cta');
 const hud = document.getElementById('hud');
 const dot = document.getElementById('dot');
 const statusEl = document.getElementById('status');
@@ -16,10 +18,9 @@ const toastEl = document.getElementById('toast');
 const help = document.getElementById('help');
 const helpToggle = document.getElementById('help-toggle');
 const clickHint = document.getElementById('click-hint');
-const startGate = document.getElementById('start');
 
 /**
- * Yield to the browser so the loading bar can actually paint.
+ * Yield to the browser between build stages.
  *
  * requestAnimationFrame alone is not enough: a backgrounded or hidden tab
  * never fires it, and the whole load sequence would sit there forever. Racing
@@ -32,8 +33,7 @@ const nextFrame = () => new Promise((resolve) => {
   setTimeout(finish, 32);
 });
 
-async function stage(pct, label, fn) {
-  bar.style.width = `${pct}%`;
+async function stage(label, fn) {
   await nextFrame();
   const t0 = performance.now();
   const out = fn();
@@ -75,32 +75,29 @@ async function main() {
   camera.position.set(...L.spawn);
 
   // ---- world --------------------------------------------------------------
-  const world = await stage(12, 'world', () => buildWorld());
+  const world = await stage('world', () => buildWorld());
   const { scene, sky, crossing, petals, colliders, trackShadow } = world;
 
-  const { composer, ink, grade } = await stage(64, 'post', () =>
+  const { composer, ink, grade, reveal } = await stage('post', () =>
     createComposer(renderer, scene, camera));
   ink.exclude = world.inkExclude;
 
   const audio = new Audio();
   const director = new Director(world, audio);
 
-  const player = await stage(82, 'player', () =>
+  const player = await stage('player', () =>
     new Explorer(camera, renderer.domElement, { colliders, crossing }));
 
   // Warm the shader cache before the first frame so entering the scene never
   // hitches on a 200ms compile.
-  await stage(94, 'compile', () => {
+  await stage('compile', () => {
     trackShadow(player.position);
     renderer.compile(scene, camera);
   });
-  await stage(100, 'ready', () => {});
 
   // ---- ui wiring ----------------------------------------------------------
-  // No gate: the scene is already there, so show it. The controls live in a
-  // corner panel you can fold away instead of a modal over the view.
-  loader.classList.add('gone');
-  setTimeout(() => loader.remove(), 1000);
+  // The world is already up and about to start rendering; the gate in front
+  // of it is a curtain, not a gate that has to be unlocked in stages.
   hud.classList.add('on');
 
   const touch = isTouchDevice();
@@ -146,8 +143,8 @@ async function main() {
 
   // Always run it, even when the stored state matches the markup's default —
   // otherwise the body class that CSS keys off never gets set. On a phone it
-  // starts folded: the start card should be the only thing on screen, and the
-  // stick and buttons explain themselves.
+  // starts folded: the entrance card should be the only thing on screen, and
+  // the stick and buttons explain themselves once the tap reveals them.
   const firstVisit = read(HELP_KEY) === null;
   const stored = read(HELP_KEY);
   setHelp(stored === null ? !touch : stored !== '0', false);
@@ -174,19 +171,6 @@ async function main() {
       setHelp(false, false);
     }
   };
-
-  if (touch) {
-    // The start card is the user gesture iOS requires before it will hand over
-    // the motion sensor, and the one Safari requires before it will play audio.
-    startGate.addEventListener('click', async () => {
-      startGate.classList.add('hidden');
-      audio.start();
-      const ok = await gyro.enable();
-      touchUI?.say(ok
-        ? '端末を動かして見回す · 左のスティックで移動'
-        : 'ドラッグで見回す · 左のスティックで移動', 4200);
-    }, { once: true });
-  }
 
   player.onGyroChange = (on) => touchUI?.setGyroActive(on);
   player.onCinematic = (on) => {
@@ -238,6 +222,7 @@ async function main() {
     petals.update(elapsed, player.position);
     sky.userData.update(elapsed);
     grade.uniforms.uTime.value = elapsed;
+    reveal.update(dt);
     audio.update(dt);
 
     // Footsteps timed off distance travelled, not off a fixed clock.
@@ -291,6 +276,39 @@ async function main() {
     tick();
   }, 30);
 
+  // ---- entrance -------------------------------------------------------------
+  // The world above is already rendering behind the gate. Once it's ready,
+  // the gate's job is just to say so and wait for a tap; the actual entrance
+  // is the rain dissolving the card into the street that was there the whole
+  // time. See src/core/reveal.js for why this replaces what used to be two
+  // separate screen changes.
+  reveal.setCard(createEntranceCard());
+  reveal.enabled = true;
+  gate.classList.add('ready');
+  gateCta.textContent = touch ? 'タップしてはじめる' : 'クリックしてはじめる';
+
+  gate.addEventListener('click', () => {
+    if (!gate.classList.contains('ready') || gate.classList.contains('leaving')) return;
+    // Pointer lock has to be requested as directly as possible inside the
+    // gesture handler, before any async work, or some browsers refuse it.
+    if (!touch) renderer.domElement.requestPointerLock?.();
+
+    gate.classList.add('leaving');
+    audio.start();
+    if (touch) {
+      gyro.enable().then((ok) => {
+        touchUI?.say(ok
+          ? '端末を動かして見回す · 左のスティックで移動'
+          : 'ドラッグで見回す · 左のスティックで移動', 4200);
+      });
+    }
+
+    reveal.start(() => {
+      reveal.enabled = false; // zero cost from here on
+      gate.remove();
+    });
+  }, { once: true });
+
   // Handy for tuning by eye from the console.
   window.SAKURA = {
     renderer, scene, camera, world, player, ink, grade, composer, audio, director,
@@ -309,11 +327,20 @@ async function main() {
       t.launch({ dir, trackZ: dir > 0 ? 17.9 : 21.9, speed, from: 215 });
       return t;
     },
+    /** Skip straight past the entrance, for screenshotting the world itself. */
+    skipGate() {
+      reveal.enabled = false;
+      gate.remove();
+    },
   };
 }
 
 main().catch((err) => {
   console.error(err);
-  loader.innerHTML = `<h1 style="font-size:1.2rem">読み込みに失敗しました</h1>
-    <p style="max-width:40ch;text-align:center;letter-spacing:0">${err.message}</p>`;
+  gate.classList.remove('ready', 'leaving');
+  gateCard.innerHTML = `
+    <h1 style="font-size:1.2rem">読み込みに失敗しました</h1>
+    <p style="max-width:40ch;margin:.8rem auto 0;font-size:.78rem;line-height:1.7;color:#7a6a80">
+      ${err.message}
+    </p>`;
 });

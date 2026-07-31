@@ -5,6 +5,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
+import { RevealPass } from './reveal.js';
 
 /**
  * The ink pass.
@@ -274,5 +275,11 @@ export function createComposer(renderer, scene, camera) {
 
   composer.addPass(new OutputPass());
 
-  return { composer, ink, bloom, grade };
+  // Last in the chain, and disabled until the entrance sequence needs it —
+  // see reveal.js. Sitting after OutputPass means it mixes the finished,
+  // display-encoded frame rather than a linear intermediate.
+  const reveal = new RevealPass();
+  composer.addPass(reveal);
+
+  return { composer, ink, bloom, grade, reveal };
 }
