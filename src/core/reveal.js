@@ -1,16 +1,15 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { mulberry32, range } from './geo.js';
 
 /**
- * The entrance transition: rain landing on a paper card, its ripples
- * dissolving into the live street underneath.
+ * The entrance transition: rain landing on a photograph, its ripples
+ * dissolving the photo into the live street underneath.
  *
  * This replaces what used to be two separate, jarring UI states — a progress
  * bar that vanished, then a "tap to start" modal that vanished — with one
- * continuous scene and a single deliberate transition. The card sits in front
- * of the world the whole time; the world is already there, already moving,
- * and the rain is what lets you see it.
+ * continuous scene and a single deliberate transition. The photo sits in
+ * front of the world the whole time; the world is already there, already
+ * moving, and the rain is what lets you see it.
  *
  * It runs as the very last pass in the post-processing chain, after
  * `OutputPass`. That matters for two reasons: the shader mixes the card
@@ -41,11 +40,21 @@ const FRAG = /* glsl */ `
 	varying vec2 vUv;
 
 	uniform sampler2D tDiffuse;   // the finished, graded frame — the world
-	uniform sampler2D uCard;      // the entrance card — see reveal.js
+	uniform sampler2D uCard;      // the entrance photo — see reveal.js
 	uniform vec2 uResolution;
+	uniform vec2 uCardSize;       // the photo's natural pixel dimensions
 	uniform float uTime;
 	uniform vec4 uDrops[ MAXD ];  // xy: position, z: spawn time, w: strength
 	uniform float uWet;           // overall transition progress, 0..1
+
+	// Same crop-to-fill behaviour as CSS background-size: cover — the photo's
+	// own aspect ratio almost never matches the viewport's, and letterboxing
+	// it would look like a placeholder rather than a chosen composition.
+	vec2 coverUv( vec2 uv ) {
+		float scale = max( uResolution.x / uCardSize.x, uResolution.y / uCardSize.y );
+		vec2 k = uResolution / ( scale * uCardSize );
+		return 0.5 + ( uv - 0.5 ) * k;
+	}
 
 	void main() {
 		vec2 uv = vUv;
@@ -74,7 +83,7 @@ const FRAG = /* glsl */ `
 		// surface but never let the world underneath show through.
 		float m = clamp( wet * uWet * 2.2 + uWet * uWet * 1.3 - 0.25, 0.0, 1.0 );
 
-		vec3 a = texture2D( uCard, uv + refr ).rgb;
+		vec3 a = texture2D( uCard, coverUv( uv + refr ) ).rgb;
 		vec3 b = texture2D( tDiffuse, uv + refr ).rgb;
 		vec3 col = mix( a, b, m );
 		col += vec3( 1.0 ) * max( 0.0, w ) * 0.8;          // wave-crest highlight
@@ -95,6 +104,7 @@ export class RevealPass extends ShaderPass {
         tDiffuse: { value: null },
         uCard: { value: null },
         uResolution: { value: new THREE.Vector2(1, 1) },
+        uCardSize: { value: new THREE.Vector2(1, 1) },
         uTime: { value: 0 },
         uWet: { value: 0 },
         uDrops: {
@@ -115,7 +125,12 @@ export class RevealPass extends ShaderPass {
     this._onComplete = null;
   }
 
-  setCard(texture) { this.uniforms.uCard.value = texture; }
+  /** `texture.image` must already be loaded — see `loadEntranceCard()`. */
+  setCard(texture) {
+    this.uniforms.uCard.value = texture;
+    const img = texture.image;
+    this.uniforms.uCardSize.value.set(img.naturalWidth || img.width, img.naturalHeight || img.height);
+  }
 
   setSize(width, height) { this.uniforms.uResolution.value.set(width, height); }
 
@@ -170,78 +185,29 @@ export class RevealPass extends ShaderPass {
 }
 
 /**
- * The card itself: a soft gradient matching the DOM entrance screen, with a
- * single quiet branch of blossom low in one corner — texture, not a subject.
- * The DOM handles the title; this only has to not fight it.
+ * Load the entrance photo as a texture.
  *
  * Deliberately left at the texture's default colour space (raw sRGB bytes,
  * not GPU-decoded to linear) because this pass runs after `OutputPass` and
  * mixes against `tDiffuse`, which is already display-encoded at that point.
  * Marking this `SRGBColorSpace` would have the GPU linearise it on sample,
  * mixing linear values against gamma-encoded ones and washing out the blend.
+ *
+ * Returns a promise so the caller can kick this off the moment the URL is
+ * known (in parallel with the heavy world-build work) and just await it once
+ * the entrance actually needs the texture.
  */
-export function createEntranceCard(seed = 4) {
-  const w = 1280, h = 800;
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  const ctx = c.getContext('2d');
-
-  // Same three stops as the DOM gate's CSS gradient (index.html `.gate-bg`),
-  // so the handover from DOM to WebGL has nothing to visibly cross.
-  const g = ctx.createLinearGradient(w * 0.1, 0, w * 0.75, h);
-  g.addColorStop(0, '#cfe5f6');
-  g.addColorStop(0.58, '#f4e3e8');
-  g.addColorStop(1, '#fdeee2');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, w, h);
-
-  const rnd = mulberry32(seed * 7919);
-  ctx.save();
-  ctx.translate(w * 0.86, h * 0.98);
-  ctx.rotate(-0.5);
-  // A single branch, low-contrast, growing up from the corner.
-  ctx.strokeStyle = 'rgba(90,70,80,0.22)';
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  let x = 0, y = 0, a = -Math.PI / 2 + 0.1;
-  const twigs = [];
-  for (let i = 0; i < 7; i++) {
-    const len = range(rnd, 70, 130);
-    a += range(rnd, -0.35, 0.35);
-    x += Math.cos(a) * len;
-    y += Math.sin(a) * len;
-    ctx.lineTo(x, y);
-    twigs.push([x, y]);
-  }
-  ctx.stroke();
-  ctx.restore();
-
-  // Soft blossom clusters along the branch, well inside the card's opacity
-  // budget so the DOM title reads cleanly over the top.
-  ctx.save();
-  ctx.translate(w * 0.86, h * 0.98);
-  ctx.rotate(-0.5);
-  for (const [tx, ty] of twigs) {
-    if (rnd() < 0.4) continue;
-    const n = 2 + Math.floor(rnd() * 3);
-    for (let i = 0; i < n; i++) {
-      const bx = tx + range(rnd, -26, 26);
-      const by = ty + range(rnd, -26, 26);
-      const r = range(rnd, 10, 22);
-      const grad = ctx.createRadialGradient(bx, by, 0, bx, by, r);
-      grad.addColorStop(0, 'rgba(246,188,207,0.42)');
-      grad.addColorStop(1, 'rgba(246,188,207,0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(bx, by, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  ctx.restore();
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.minFilter = THREE.LinearFilter;
-  tex.generateMipmaps = false;
-  return tex;
+export function loadEntranceCard(url) {
+  return new Promise((resolve, reject) => {
+    new THREE.TextureLoader().load(
+      url,
+      (texture) => {
+        texture.minFilter = THREE.LinearFilter;
+        texture.generateMipmaps = false;
+        resolve(texture);
+      },
+      undefined,
+      reject
+    );
+  });
 }

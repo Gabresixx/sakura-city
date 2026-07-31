@@ -14,7 +14,7 @@
   * { box-sizing: border-box; }
   html, body {
     margin: 0; height: 100%; overflow: hidden;
-    background: #b9d4ea;
+    background: #16233a;
     font-family: "Yu Gothic", "YuGothic", "Hiragino Kaku Gothic ProN",
                  "Noto Sans JP", "Meiryo", system-ui, sans-serif;
     color: var(--ink);
@@ -29,9 +29,10 @@
      that faded out, then a "tap to start" modal that faded out separately —
      two hard cuts before you ever saw the street. This is a single card that
      sits in front of a world which is already there and already moving; the
-     only thing that changes is a line of text, and then rain. `#gate-bg` is
-     the paper-gradient backdrop, drawn again in WebGL by reveal.js so the
-     handover between the two has nothing to visibly cross. */
+     only thing that changes is a line of text, and then rain. `#gate-bg`'s
+     photo is set from JS (main.js picks the mobile or desktop crop) and drawn
+     again in WebGL by reveal.js, so the handover between the two — at tap,
+     right before the rain starts — has nothing to visibly cross. */
   #gate {
     position: fixed; inset: 0; z-index: 30;
     display: flex; align-items: center; justify-content: center;
@@ -45,16 +46,25 @@
 
   #gate-bg {
     position: absolute; inset: 0;
-    background: linear-gradient(170deg, #cfe5f6 0%, #f4e3e8 58%, #fdeee2 100%);
+    background-color: #16233a; /* shows for the instant before the photo decodes */
+    background-size: cover; background-position: center;
     transition: opacity .7s ease;
   }
   #gate.ready #gate-bg { opacity: 0; }
+
+  /* A soft dark halo behind the text — the photo's crop shifts with viewport
+     size, so this is what keeps the title legible regardless of what part of
+     it lands there. */
+  #gate-scrim {
+    position: absolute; inset: 0;
+    background: radial-gradient(closest-side, rgba(10,16,30,.4), transparent 72%);
+  }
 
   /* A handful of petals drifting down behind the card text — cheap (pure
      CSS), and it keeps the entrance from reading as a static splash image. */
   .gate-petal {
     position: absolute; top: -6%; width: 10px; height: 10px; border-radius: 60% 5% 60% 5%;
-    background: rgba(231,154,182,.55); opacity: 0;
+    background: rgba(246,196,214,.6); opacity: 0;
     animation: petal-fall linear infinite;
   }
   @keyframes petal-fall {
@@ -70,13 +80,16 @@
   #gate.leaving #gate-card { opacity: 0; transform: translateY(-8px); }
   #gate-card h1 {
     margin: 0; font-size: clamp(2.1rem, 7vw, 3.4rem); font-weight: 800;
-    letter-spacing: .22em; text-indent: .22em; color: #46394f;
+    letter-spacing: .22em; text-indent: .22em; color: #f8eee1;
+    text-shadow: 0 4px 26px rgba(8,12,26,.55);
   }
   #gate-card .sub {
-    margin: .5rem 0 0; letter-spacing: .3em; font-size: .78rem; color: #7a6a80;
+    margin: .5rem 0 0; letter-spacing: .3em; font-size: .78rem; color: rgba(248,238,225,.8);
+    text-shadow: 0 2px 16px rgba(8,12,26,.5);
   }
   #gate-cta {
-    margin-top: 1.6rem; font-size: .76rem; letter-spacing: .2em; color: #9385a0;
+    margin-top: 1.6rem; font-size: .76rem; letter-spacing: .2em; color: rgba(248,238,225,.75);
+    text-shadow: 0 2px 12px rgba(8,12,26,.5);
     animation: gate-breathe 2.6s ease-in-out infinite;
   }
   #gate.ready #gate-cta {
@@ -119,6 +132,7 @@
 
   <div id="gate">
     <div id="gate-bg"></div>
+    <div id="gate-scrim"></div>
     <div class="gate-petal" style="left:12%; width:9px; height:9px; --drift:60px; animation-duration:9s; animation-delay:.2s"></div>
     <div class="gate-petal" style="left:26%; width:7px; height:7px; --drift:-40px; animation-duration:7.5s; animation-delay:1.6s"></div>
     <div class="gate-petal" style="left:41%; width:11px; height:11px; --drift:30px; animation-duration:10.5s; animation-delay:.9s"></div>

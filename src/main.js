@@ -1,14 +1,17 @@
 import * as THREE from 'three';
 import { buildWorld, Director } from './world/scene.js';
 import { createComposer } from './core/post.js';
-import { createEntranceCard } from './core/reveal.js';
+import { loadEntranceCard } from './core/reveal.js';
 import { Explorer } from './player/controls.js';
 import { Gyro } from './player/gyro.js';
 import { createTouchUI, isTouchDevice } from './ui/touch.js';
 import { Audio } from './core/audio.js';
 import { L } from './world/layout.js';
+import entranceMobile from './assets/entrance-mobile.jpg';
+import entranceDesktop from './assets/entrance-desktop.jpg';
 
 const gate = document.getElementById('gate');
+const gateBg = document.getElementById('gate-bg');
 const gateCard = document.getElementById('gate-card');
 const gateCta = document.getElementById('gate-cta');
 const dot = document.getElementById('dot');
@@ -70,6 +73,14 @@ async function main() {
   camera.rotation.order = 'YXZ';
   camera.position.set(...L.spawn);
 
+  // Picked now, immediately, so the fetch runs the whole time the world is
+  // building instead of starting only once everything else is ready.
+  const touch = isTouchDevice();
+  document.body.classList.toggle('is-touch', touch);
+  const entranceUrl = touch ? entranceMobile : entranceDesktop;
+  gateBg.style.backgroundImage = `url(${entranceUrl})`;
+  const cardTexture = loadEntranceCard(entranceUrl);
+
   // ---- world --------------------------------------------------------------
   const world = await stage('world', () => buildWorld());
   const { scene, sky, crossing, petals, colliders, trackShadow } = world;
@@ -92,9 +103,6 @@ async function main() {
   });
 
   // ---- ui wiring ----------------------------------------------------------
-  const touch = isTouchDevice();
-  document.body.classList.toggle('is-touch', touch);
-
   const gyro = new Gyro();
   player.attachGyro(gyro);
 
@@ -227,10 +235,15 @@ async function main() {
   // ---- entrance -------------------------------------------------------------
   // The world above is already rendering behind the gate. Once it's ready,
   // the gate's job is just to say so and wait for a tap; the actual entrance
-  // is the rain dissolving the card into the street that was there the whole
+  // is the rain dissolving the photo into the street that was there the whole
   // time. See src/core/reveal.js for why this replaces what used to be two
   // separate screen changes.
-  reveal.setCard(createEntranceCard());
+  //
+  // The photo started loading before the world did, so this almost never
+  // actually waits — but if it's still in flight (a cold cache, a slow link),
+  // the gate is happy to sit on "支度をしています" a little longer rather than
+  // flip to "ready" a beat before the WebGL card has anything to show.
+  reveal.setCard(await cardTexture);
   reveal.enabled = true;
   gate.classList.add('ready');
   gateCta.textContent = touch ? 'タップしてはじめる' : 'クリックしてはじめる';
@@ -288,7 +301,7 @@ main().catch((err) => {
   gate.classList.remove('ready', 'leaving');
   gateCard.innerHTML = `
     <h1 style="font-size:1.2rem">読み込みに失敗しました</h1>
-    <p style="max-width:40ch;margin:.8rem auto 0;font-size:.78rem;line-height:1.7;color:#7a6a80">
+    <p style="max-width:40ch;margin:.8rem auto 0;font-size:.78rem;line-height:1.7;color:rgba(248,238,225,.8)">
       ${err.message}
     </p>`;
 });
