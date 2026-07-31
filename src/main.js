@@ -13,7 +13,6 @@ import entranceDesktop from './assets/entrance-desktop.jpg';
 const gate = document.getElementById('gate');
 const gateBg = document.getElementById('gate-bg');
 const gateCard = document.getElementById('gate-card');
-const gateCta = document.getElementById('gate-cta');
 const dot = document.getElementById('dot');
 const toastEl = document.getElementById('toast');
 const clickHint = document.getElementById('click-hint');
@@ -121,7 +120,12 @@ async function main() {
       onCinematic: () => { player.toggleCinematic(); return player.cinematic; },
     });
     player.setTouchSource(touchUI.state);
-    touchUI.show();
+    // Not shown yet — see the gate's click handler below. It would be
+    // visually harmless to show it now (the gate sits above it and covers
+    // the whole screen), but "harmless in theory, given correct compositing
+    // everywhere" is exactly the kind of assumption not worth relying on for
+    // something a phone's browser has to get right through backdrop-filter
+    // and a WebGL canvas at once. Simplest fix: it just isn't there yet.
   } else {
     clickHint.classList.add('on');
   }
@@ -241,12 +245,11 @@ async function main() {
   //
   // The photo started loading before the world did, so this almost never
   // actually waits — but if it's still in flight (a cold cache, a slow link),
-  // the gate is happy to sit on "支度をしています" a little longer rather than
-  // flip to "ready" a beat before the WebGL card has anything to show.
+  // the gate is happy to sit there a little longer rather than flip to
+  // "ready" a beat before the WebGL card has anything to show.
   reveal.setCard(await cardTexture);
   reveal.enabled = true;
   gate.classList.add('ready');
-  gateCta.textContent = touch ? 'タップしてはじめる' : 'クリックしてはじめる';
 
   gate.addEventListener('click', () => {
     if (!gate.classList.contains('ready') || gate.classList.contains('leaving')) return;
@@ -257,6 +260,7 @@ async function main() {
     gate.classList.add('leaving');
     audio.start();
     if (touch) {
+      touchUI?.show();
       gyro.enable().then((ok) => {
         touchUI?.say(ok
           ? '端末を動かして見回す · 左のスティックで移動'
@@ -300,7 +304,7 @@ main().catch((err) => {
   console.error(err);
   gate.classList.remove('ready', 'leaving');
   gateCard.innerHTML = `
-    <h1 style="font-size:1.2rem">読み込みに失敗しました</h1>
+    <h1 style="font-size:1.2rem;color:#f8eee1">読み込みに失敗しました</h1>
     <p style="max-width:40ch;margin:.8rem auto 0;font-size:.78rem;line-height:1.7;color:rgba(248,238,225,.8)">
       ${err.message}
     </p>`;

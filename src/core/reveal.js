@@ -46,6 +46,9 @@ const FRAG = /* glsl */ `
 	uniform float uTime;
 	uniform vec4 uDrops[ MAXD ];  // xy: position, z: spawn time, w: strength
 	uniform float uWet;           // overall transition progress, 0..1
+	uniform float uSettle;        // 1 → 0 once uWet reaches 1: fades any last
+	                               // ripple sparkle out on its own clock, so the
+	                               // pass never has to cut away mid-glint
 
 	// Same crop-to-fill behaviour as CSS background-size: cover — the photo's
 	// own aspect ratio almost never matches the viewport's, and letterboxing
@@ -86,11 +89,11 @@ const FRAG = /* glsl */ `
 		vec3 a = texture2D( uCard, coverUv( uv + refr ) ).rgb;
 		vec3 b = texture2D( tDiffuse, uv + refr ).rgb;
 		vec3 col = mix( a, b, m );
-		col += vec3( 1.0 ) * max( 0.0, w ) * 0.8;          // wave-crest highlight
-		col += vec3( 0.3, 0.55, 1.0 ) * abs( w ) * 0.4;    // cool glint
+		col += vec3( 1.0 ) * max( 0.0, w ) * 0.8 * uSettle;          // wave-crest highlight
+		col += vec3( 0.3, 0.55, 1.0 ) * abs( w ) * 0.4 * uSettle;    // cool glint
 		// The screen settles to a calm wash right as the transition finishes.
 		col = mix( col, vec3( 0.55, 0.75, 0.95 ),
-			smoothstep( 0.85, 1.0, uWet ) * ( 1.0 - smoothstep( 0.97, 1.0, uWet ) ) * 0.18 );
+			smoothstep( 0.85, 1.0, uWet ) * ( 1.0 - smoothstep( 0.97, 1.0, uWet ) ) * 0.18 * uSettle );
 
 		gl_FragColor = vec4( col, 1.0 );
 	}
@@ -107,6 +110,7 @@ export class RevealPass extends ShaderPass {
         uCardSize: { value: new THREE.Vector2(1, 1) },
         uTime: { value: 0 },
         uWet: { value: 0 },
+        uSettle: { value: 1 },
         uDrops: {
           value: Array.from({ length: MAX_DROPS }, () => new THREE.Vector4(0, 0, -999, 0)),
         },
@@ -119,9 +123,12 @@ export class RevealPass extends ShaderPass {
     this._t = 0;
     this._head = 0;
     this._idleNext = 1.4 + Math.random() * 1.6; // first idle drop lands soon
-    this._running = false;
+    /** 'idle' (waiting for a tap) → 'running' (rain) → 'settling' (fade out). */
+    this._phase = 'idle';
     this._t0 = 0;
-    this._duration = 3.6;
+    this._duration = 1.8;
+    this._settleT = 0;
+    this._settleDuration = 0.7;
     this._onComplete = null;
   }
 
@@ -139,10 +146,20 @@ export class RevealPass extends ShaderPass {
     this._head = (this._head + 1) % MAX_DROPS;
   }
 
-  /** Begin dissolving the card into the world behind it. */
-  start(onComplete, duration = 3.6) {
-    if (this._running) return;
-    this._running = true;
+  /**
+   * Begin dissolving the card into the world behind it.
+   *
+   * `duration` is deliberately short and the drop rate deliberately sparse —
+   * a handful of ripples, not a downpour. Making the whole thing feel quicker
+   * is a `duration` change, not a speed multiplier: every ripple still
+   * expands and decays at the same physical rate (see the wave/decay
+   * constants in the shader above), there are just fewer of them and the
+   * sequence stops sooner. Playing the same rain back at 2x would look
+   * frantic; this looks like less rain.
+   */
+  start(onComplete, duration = 1.8) {
+    if (this._phase !== 'idle') return;
+    this._phase = 'running';
     this._t0 = this._t;
     this._duration = duration;
     this._onComplete = onComplete;
@@ -151,27 +168,42 @@ export class RevealPass extends ShaderPass {
     this._drop(0.5, 0.46, 0.9);
   }
 
-  /** Advance the clock. Call every frame regardless of run state. */
+  /** Advance the clock. Call every frame regardless of phase. */
   update(dt) {
     this._t += dt;
     this.uniforms.uTime.value = this._t;
 
-    if (this._running) {
+    if (this._phase === 'running') {
       const p = Math.min(1, (this._t - this._t0) / this._duration);
       // Heaviest in the middle of the transition, tapering at both ends —
       // the rain builds, peaks, and eases off rather than switching on.
+      // Kept sparse throughout: a light shower, not a storm.
       const density = Math.sin(p * Math.PI);
-      if (Math.random() < 0.08 + density * 0.5) {
+      if (Math.random() < 0.035 + density * 0.22) {
         this._drop(Math.random(), Math.random(), 0.35 + Math.random() * 0.85);
       }
       this.uniforms.uWet.value = p < 0.5 ? 2 * p * p : 1 - ((-2 * p + 2) ** 2) / 2;
       if (p >= 1) {
-        this._running = false;
+        // The world is fully visible now, but a ripple or two may still be
+        // mid-decay. Rather than cut the whole pass here — which is what
+        // used to make the entrance pop off abruptly — hold `uWet` at 1 and
+        // fade the ripple highlights out over their own short window before
+        // handing off. `uWet` doesn't move during this, so the world stays
+        // exactly as revealed; only the last of the water goes quiet.
+        this._phase = 'settling';
+        this._settleT = 0;
+      }
+    } else if (this._phase === 'settling') {
+      this._settleT += dt;
+      const s = Math.max(0, 1 - this._settleT / this._settleDuration);
+      this.uniforms.uSettle.value = s;
+      if (this._settleT >= this._settleDuration) {
+        this._phase = 'done';
         const cb = this._onComplete;
         this._onComplete = null;
         cb?.();
       }
-    } else if (this.enabled) {
+    } else if (this._phase === 'idle' && this.enabled) {
       // A quiet, occasional drop while the card waits for a tap — just
       // enough motion that the entrance never looks like a frozen screenshot.
       this._idleNext -= dt;

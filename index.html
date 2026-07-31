@@ -74,26 +74,24 @@
     100% { transform: translate(var(--drift, 40px), 112vh) rotate(300deg); opacity: 0; }
   }
 
+  /* The only text on the entrance now: a single wordmark standing in for
+     both the title and the "start" cue. It breathes gently while the world
+     is still loading, and picks up in colour and pace once a tap will
+     actually do something — the whole photo is the click target, so this
+     line doubles as the only affordance for that. */
   #gate-card {
     position: relative; text-align: center; transition: opacity .4s ease, transform .4s ease;
   }
   #gate.leaving #gate-card { opacity: 0; transform: translateY(-8px); }
-  #gate-card h1 {
-    margin: 0; font-size: clamp(2.1rem, 7vw, 3.4rem); font-weight: 800;
-    letter-spacing: .22em; text-indent: .22em; color: #f8eee1;
-    text-shadow: 0 4px 26px rgba(8,12,26,.55);
-  }
-  #gate-card .sub {
-    margin: .5rem 0 0; letter-spacing: .3em; font-size: .78rem; color: rgba(248,238,225,.8);
-    text-shadow: 0 2px 16px rgba(8,12,26,.5);
-  }
-  #gate-cta {
-    margin-top: 1.6rem; font-size: .76rem; letter-spacing: .2em; color: rgba(248,238,225,.75);
-    text-shadow: 0 2px 12px rgba(8,12,26,.5);
+  #gate-card .mark {
+    margin: 0; font-family: Georgia, "Times New Roman", serif; font-style: italic;
+    font-size: clamp(1.7rem, 6vw, 2.6rem); font-weight: 400;
+    letter-spacing: .12em; color: rgba(248,238,225,.82);
+    text-shadow: 0 3px 20px rgba(8,12,26,.55);
     animation: gate-breathe 2.6s ease-in-out infinite;
   }
-  #gate.ready #gate-cta {
-    color: var(--pink); font-weight: 700; letter-spacing: .34em;
+  #gate.ready #gate-card .mark {
+    color: var(--pink); letter-spacing: .18em;
     animation: gate-breathe 1.8s ease-in-out infinite;
   }
   @keyframes gate-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
@@ -140,9 +138,7 @@
     <div class="gate-petal" style="left:73%; width:10px; height:10px; --drift:45px; animation-duration:9.8s; animation-delay:.1s"></div>
     <div class="gate-petal" style="left:87%; width:8px; height:8px; --drift:-30px; animation-duration:7s; animation-delay:1.3s"></div>
     <div id="gate-card">
-      <h1>桜町</h1>
-      <p class="sub">SAKURA CITY</p>
-      <p id="gate-cta">支度をしています</p>
+      <p class="mark">Antheia</p>
     </div>
   </div>
 
