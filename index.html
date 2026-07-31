@@ -85,49 +85,6 @@
   }
   @keyframes gate-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
 
-  /* ---- help tab ---------------------------------------------------------
-     A modal gate was the wrong shape for this: it covered the scene it was
-     describing, and — because it sat over the whole viewport with pointer
-     events on — it swallowed the very click that captures the cursor. This is
-     a corner panel you can leave open or fold away; its state is remembered. */
-  #help { position: fixed; z-index: 20; pointer-events: none;
-          top: max(14px, env(safe-area-inset-top));
-          right: max(14px, env(safe-area-inset-right));
-          display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-  #help-toggle {
-    pointer-events: auto; cursor: pointer; font: inherit; font-size: .72rem;
-    letter-spacing: .14em; padding: .42rem .95rem; border-radius: 999px;
-    color: var(--ink); border: 1px solid rgba(255,255,255,.5);
-    background: rgba(253,246,242,.72); backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 4px 16px rgba(40,30,55,.18); transition: background .2s ease;
-  }
-  #help-toggle:hover { background: rgba(253,246,242,.92); }
-  #help-panel {
-    pointer-events: auto; width: 268px; max-width: calc(100vw - 28px);
-    background: rgba(253,246,242,.88); backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border: 1px solid rgba(255,255,255,.55); border-radius: 14px;
-    padding: 1rem 1.1rem 0.9rem; box-shadow: 0 12px 34px rgba(40,30,55,.22);
-    transform-origin: top right; transition: opacity .22s ease, transform .22s ease;
-  }
-  #help:not(.open) #help-panel {
-    opacity: 0; transform: scale(.94) translateY(-6px); pointer-events: none;
-  }
-  #help-panel h2 { margin: 0 0 .15rem; font-size: .92rem; letter-spacing: .12em; }
-  #help-panel .lede { margin: 0 0 .75rem; font-size: .72rem; line-height: 1.75; color: #7a6a80; }
-  #help-panel dl { display: grid; grid-template-columns: auto 1fr; gap: .34rem .8rem;
-                   margin: 0; font-size: .74rem; color: #58495f; align-items: center; }
-  #help-panel dt { margin: 0; }
-  #help-panel dd { margin: 0; }
-  #help-panel .foot { margin: .85rem 0 0; padding-top: .7rem; font-size: .66rem;
-                      letter-spacing: .1em; color: #9385a0;
-                      border-top: 1px solid rgba(120,100,130,.16); }
-  kbd {
-    font: inherit; font-size: .7rem; background: #efe4e8; border-radius: 6px;
-    padding: .1rem .42rem; border-bottom: 2px solid #d9c7cf; white-space: nowrap;
-  }
-
   /* Prompt to capture the cursor. Only on desktop, only while unlocked. */
   #click-hint {
     position: fixed; left: 50%; bottom: 12%; transform: translateX(-50%);
@@ -138,16 +95,6 @@
   #click-hint.on { opacity: 1; }
   body.is-touch #click-hint { display: none; }
 
-  /* ---- in-world hud ----------------------------------------------------- */
-  #hud {
-    position: fixed; left: 0; right: 0; bottom: 0; padding: 1rem 1.2rem;
-    display: flex; justify-content: space-between; align-items: flex-end;
-    font-size: .7rem; letter-spacing: .12em; color: rgba(255,255,255,.82);
-    text-shadow: 0 1px 6px rgba(35,25,45,.6);
-    opacity: 0; transition: opacity .5s ease;
-  }
-  #hud.on { opacity: 1; }
-  #hud .tag { opacity: .72; }
   #dot {
     position: fixed; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px;
     border-radius: 50%; background: rgba(255,255,255,.5);
@@ -161,58 +108,13 @@
     opacity: 0; transition: opacity .35s ease;
   }
   #toast.on { opacity: 1; }
-
-  /* One switch, set from JS once the pointer type is known — a width media
-     query gets tablets and small desktop windows wrong in opposite ways.
-     `#help-panel dl` sets display:grid with ID-level specificity, so the
-     show/hide rules here have to match that specificity or they lose. */
-  #help-panel .touch-keys { display: none; }
-  body.is-touch #help-panel .desktop-keys { display: none; }
-  body.is-touch #help-panel dl.touch-keys { display: grid; }
-  body.is-touch #help-panel p.touch-keys { display: block; }
-  /* On a phone the stick owns the bottom of the screen, so the HUD moves up —
-     stacked on the left, clear of the help button in the opposite corner. */
-  body.is-touch #hud {
-    bottom: auto; top: 0; flex-direction: column; align-items: flex-start; gap: .2rem;
-    padding-top: max(1rem, env(safe-area-inset-top)); padding-right: 6.5rem;
-  }
-  body.is-touch.help-open #hud { opacity: 0; }
 </style>
 </head>
 <body>
   <div id="ui">
     <div id="dot"></div>
-    <div id="hud">
-      <div><span class="tag">桜町 二丁目</span> · SAKURA CITY</div>
-      <div class="tag" id="status">踏切 — 待機中</div>
-    </div>
     <div id="toast"></div>
     <div id="click-hint">クリックして視点操作</div>
-  </div>
-
-  <div id="help" class="open">
-    <button id="help-toggle" type="button" aria-expanded="true" aria-controls="help-panel">
-      操作
-    </button>
-    <div id="help-panel" role="region" aria-label="操作説明">
-      <h2>桜町</h2>
-      <p class="lede">春の午後、線路沿いの細い通り。<br />電車が来るまで、少し歩いてみてください。</p>
-      <dl class="desktop-keys">
-        <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>歩く</dd>
-        <dt><kbd>Shift</kbd></dt><dd>走る</dd>
-        <dt><kbd>マウス</kbd></dt><dd>見回す</dd>
-        <dt><kbd>C</kbd></dt><dd>シネマティック</dd>
-        <dt><kbd>M</kbd></dt><dd>サウンド</dd>
-        <dt><kbd>Esc</kbd></dt><dd>カーソルを戻す</dd>
-      </dl>
-      <dl class="touch-keys">
-        <dt><kbd>スティック</kbd></dt><dd>歩く</dd>
-        <dt><kbd>ドラッグ</kbd></dt><dd>見回す</dd>
-        <dt><kbd>端末を動かす</kbd></dt><dd>ジャイロで見回す</dd>
-        <dt><kbd>ボタン</kbd></dt><dd>走る · ジャイロ · シネマ</dd>
-      </dl>
-      <p class="foot desktop-keys"><kbd>H</kbd> でこのパネルを開閉</p>
-    </div>
   </div>
 
   <div id="gate">

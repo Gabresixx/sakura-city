@@ -11,12 +11,8 @@ import { L } from './world/layout.js';
 const gate = document.getElementById('gate');
 const gateCard = document.getElementById('gate-card');
 const gateCta = document.getElementById('gate-cta');
-const hud = document.getElementById('hud');
 const dot = document.getElementById('dot');
-const statusEl = document.getElementById('status');
 const toastEl = document.getElementById('toast');
-const help = document.getElementById('help');
-const helpToggle = document.getElementById('help-toggle');
 const clickHint = document.getElementById('click-hint');
 
 /**
@@ -96,10 +92,6 @@ async function main() {
   });
 
   // ---- ui wiring ----------------------------------------------------------
-  // The world is already up and about to start rendering; the gate in front
-  // of it is a curtain, not a gate that has to be unlocked in stages.
-  hud.classList.add('on');
-
   const touch = isTouchDevice();
   document.body.classList.toggle('is-touch', touch);
 
@@ -126,50 +118,11 @@ async function main() {
     clickHint.classList.add('on');
   }
 
-  // ---- help panel ---------------------------------------------------------
-  const HELP_KEY = 'sakura.help';
-  const read = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
-  const write = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
-
-  /** `remember: false` for automatic folds, so they never overwrite a choice. */
-  function setHelp(open, remember = true) {
-    help.classList.toggle('open', open);
-    // On a phone the panel is nearly as wide as the screen, so the HUD hides
-    // behind it. The body class lets CSS fade the HUD out for the duration.
-    document.body.classList.toggle('help-open', open);
-    helpToggle.setAttribute('aria-expanded', String(open));
-    if (remember) write(HELP_KEY, open ? '1' : '0');
-  }
-
-  // Always run it, even when the stored state matches the markup's default —
-  // otherwise the body class that CSS keys off never gets set. On a phone it
-  // starts folded: the entrance card should be the only thing on screen, and
-  // the stick and buttons explain themselves once the tap reveals them.
-  const firstVisit = read(HELP_KEY) === null;
-  const stored = read(HELP_KEY);
-  setHelp(stored === null ? !touch : stored !== '0', false);
-
-  helpToggle.addEventListener('click', (e) => {
-    e.stopPropagation();
-    setHelp(!help.classList.contains('open'));
-  });
-  // Clicking the panel itself must not fall through and capture the cursor.
-  help.addEventListener('click', (e) => e.stopPropagation());
-
   // ---- entering / leaving pointer lock ------------------------------------
-  let foldedOnce = false;
   player.onLockChange = (locked) => {
     dot.classList.toggle('on', locked);
     clickHint.classList.toggle('on', !locked && !touch);
-    if (!locked) return;
-    audio.start();
-    // On a first visit the panel is open because nobody chose that, so fold it
-    // once you actually start exploring. Never on a return visit — by then the
-    // open state is a decision, and overriding it would be rude.
-    if (firstVisit && !foldedOnce && help.classList.contains('open')) {
-      foldedOnce = true;
-      setHelp(false, false);
-    }
+    if (locked) audio.start();
   };
 
   player.onGyroChange = (on) => touchUI?.setGyroActive(on);
@@ -180,7 +133,6 @@ async function main() {
 
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyM') toast(audio.toggle() ? 'サウンド ON' : 'サウンド OFF');
-    if (e.code === 'KeyH') setHelp(!help.classList.contains('open'));
   });
 
   // Re-zero the heading when the phone is rotated, or the world ends up
@@ -235,10 +187,6 @@ async function main() {
     } else {
       stepTimer = 0.2;
     }
-
-    statusEl.textContent = crossing.active || crossing.down > 0.01
-      ? '踏切 — 電車が通ります'
-      : '踏切 — 待機中';
 
     composer.render();
 
