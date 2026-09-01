@@ -6,6 +6,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { RevealPass } from './reveal.js';
+import { SunShaftPass } from './sunshafts.js';
 
 /**
  * The ink pass.
@@ -300,6 +301,12 @@ export function createComposer(renderer, scene, camera) {
   const ink = new InkPass(scene, camera);
   composer.addPass(ink);
 
+  // Dynamic depth-aware shafts reuse the exact depth texture generated above.
+  // No extra scene render is needed: branches, wires, poles and buildings cut
+  // the scattering pattern as the camera moves.
+  const shafts = new SunShaftPass(camera, ink.normalRT.depthTexture);
+  composer.addPass(shafts);
+
   // Threshold sits above 1.0 on purpose: only things that genuinely emit —
   // vending machines, crossing lamps, headlights — are allowed to bloom. A
   // lower threshold catches the sky and smears the whole plate.
@@ -317,5 +324,5 @@ export function createComposer(renderer, scene, camera) {
   const reveal = new RevealPass();
   composer.addPass(reveal);
 
-  return { composer, ink, bloom, grade, reveal };
+  return { composer, ink, shafts, bloom, grade, reveal };
 }
