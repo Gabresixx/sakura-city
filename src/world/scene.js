@@ -52,8 +52,8 @@ export function buildWorld() {
   const sky = createSky(sunPos);
   scene.add(sky);
 
-  // Secondary light is intentionally separated from the key. It adds broad
-  // painterly bounce without changing the toon ramps or the sun's authority.
+  // Secondary light lives in fixed world-space zones. None of it follows the
+  // player; walking through the scene changes which zone you occupy.
   const lighting = createLightingRig(scene);
 
   // ---- geometry -----------------------------------------------------------
@@ -99,6 +99,8 @@ export function buildWorld() {
   ];
 
   // ---- shadow follow ------------------------------------------------------
+  // Only the *shadow camera* follows the player. The sun direction stays fixed
+  // in world space and remains exactly aligned with the painted sky.
   const sunDir = sunPos.clone().normalize();
   const texel = (EXTENT * 2) / 2048;
   function trackShadow(focus) {
@@ -112,7 +114,7 @@ export function buildWorld() {
   }
 
   return {
-    scene, sky, crossing, petals, trains, sun, lighting,
+    scene, sky, crossing, petals, trains, sun, sunDirection: sunDir, lighting,
     colliders: { circles, boxes },
     trackShadow,
     /** Objects the ink pass must not see — they have no meaningful normals. */
@@ -183,11 +185,6 @@ export class Director {
   /** Advance whatever is already running: trains, audio, and the crossing. */
   _step(dt, camera) {
     const { crossing, trains } = this.world;
-
-    // Painterly secondary lighting follows the same world clock as everything
-    // else, so it remains smooth through sprinting, cinematic mode and train
-    // events without creating another animation loop.
-    this.world.lighting?.update(dt, camera);
 
     // The crossing stays armed while any train is inbound or still clearing.
     let blocking = false;
