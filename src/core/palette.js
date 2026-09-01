@@ -20,21 +20,22 @@ export const LIGHT = {
   ambient: 0xb2adcd,
   ambientIntensity: 0.36,
 
-  // Secondary painterly fills. They are intentionally strong enough to be
-  // *read* while walking, but remain broad and shadowless so they still behave
-  // like painted colour fields rather than extra realistic light sources.
-  facadeBounce: 0xffcfad,
-  facadeBounceIntensity: 28,
-  facadeBounceDistance: 13,
-  blossomBounce: 0xffa8c8,
-  blossomBounceIntensity: 18,
-  blossomBounceDistance: 14,
-  crossingFill: 0xcfe4ff,
-  crossingFillIntensity: 30,
-  crossingFillDistance: 28,
-  groundBounce: 0xffdfbd,
-  groundBounceIntensity: 13,
-  groundBounceDistance: 11,
+  // Secondary painterly fills. These are intentionally restrained because the
+  // renderer uses NoToneMapping: once a toon band clips, extra light just turns
+  // the painted palette into white. The depth should be visible through local
+  // colour separation and falloff, not through overexposure.
+  facadeBounce: 0xffd8bf,
+  facadeBounceIntensity: 8.5,
+  facadeBounceDistance: 9.5,
+  blossomBounce: 0xffbfd3,
+  blossomBounceIntensity: 5.5,
+  blossomBounceDistance: 11.5,
+  crossingFill: 0xd8e9ff,
+  crossingFillIntensity: 9.0,
+  crossingFillDistance: 22,
+  groundBounce: 0xffe6c9,
+  groundBounceIntensity: 3.8,
+  groundBounceDistance: 7.5,
 
   // ~64° up, from over the west rooftops. Elevation matters more than it
   // sounds: this street is 6m wide between 6m buildings, so anything below
