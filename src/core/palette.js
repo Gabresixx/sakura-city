@@ -86,7 +86,7 @@ export const C = {
   rail: 0xb6b3bd,
   railSide: 0x7c7480,
   crossingDeck: 0xb9b6c0,
-  barrierYellow: 0xf5c93f,
+  barrierYellow: 0xf5c93c,
   barrierBlack: 0x2f2b33,
   signalRed: 0xff4b42,
   signalBody: 0x37333d,
