@@ -3,121 +3,106 @@ import { LIGHT } from '../core/palette.js';
 import { L } from './layout.js';
 
 /**
- * Painterly secondary lighting that adds readable spatial depth without
- * replacing the authored cel-shaded key light.
+ * Spatial, world-anchored secondary lighting.
  *
- * These are local colour washes, not extra suns. Keep their falloff tight and
- * their activation contextual so they add depth without clipping the palette.
+ * Nothing in this rig follows the player. The player can walk into and out of
+ * these painted light fields, but the fields themselves stay fixed in world
+ * space. The sun remains the only shadow-casting light and the authored toon
+ * ramps remain the visual authority.
  */
 
-const STREET_CANOPIES = [
-  [7.4, -31.2], [-7.0, -45.9], [7.2, -13.3], [-6.8, -14.0],
-  [7.6, -3.8], [-7.4, 5.6], [-6.6, 14.6], [6.8, 25.8],
-  [7.4, 35.6], [-7.0, 47.0],
-];
+function addSpot(group, {
+  name, color, intensity, distance, position, target,
+  angle = 0.9, penumbra = 0.78, decay = 2,
+}) {
+  const light = new THREE.SpotLight(color, intensity, distance, angle, penumbra, decay);
+  light.name = name;
+  light.position.set(...position);
+  light.castShadow = false;
+  light.target.position.set(...target);
+  group.add(light, light.target);
+  return light;
+}
 
-function smooth01(edge0, edge1, x) {
-  const t = THREE.MathUtils.clamp((x - edge0) / Math.max(edge1 - edge0, 1e-5), 0, 1);
-  return t * t * (3 - 2 * t);
+function addPoint(group, { name, color, intensity, distance, position, decay = 2 }) {
+  const light = new THREE.PointLight(color, intensity, distance, decay);
+  light.name = name;
+  light.position.set(...position);
+  light.castShadow = false;
+  group.add(light);
+  return light;
 }
 
 export function createLightingRig(scene) {
-  const facadeBounce = new THREE.PointLight(
-    LIGHT.facadeBounce, 0, LIGHT.facadeBounceDistance, 1.75
-  );
-  facadeBounce.name = 'light:facade-bounce';
-  facadeBounce.castShadow = false;
+  const group = new THREE.Group();
+  group.name = 'lighting:spatial-zones';
 
-  const blossomBounce = new THREE.PointLight(
-    LIGHT.blossomBounce, 0, LIGHT.blossomBounceDistance, 1.8
-  );
-  blossomBounce.name = 'light:blossom-bounce';
-  blossomBounce.castShadow = false;
+  // Warm facade returns. These are fixed to actual blocks instead of being
+  // parked beside the camera, so walking down the street changes the balance
+  // naturally. The long penumbra keeps them painterly rather than theatrical.
+  const facade = [
+    addSpot(group, {
+      name: 'light:facade-west-near',
+      color: LIGHT.facadeBounce,
+      intensity: 2.0,
+      distance: 16,
+      position: [-6.2, 3.0, -28],
+      target: [-1.2, 1.1, -26],
+    }),
+    addSpot(group, {
+      name: 'light:facade-east-mid',
+      color: LIGHT.facadeBounce,
+      intensity: 1.8,
+      distance: 15,
+      position: [6.2, 3.0, -2],
+      target: [1.2, 1.0, 0],
+    }),
+    addSpot(group, {
+      name: 'light:facade-east-far',
+      color: LIGHT.facadeBounce,
+      intensity: 1.7,
+      distance: 15,
+      position: [6.2, 3.0, 38],
+      target: [1.2, 1.0, 37],
+    }),
+  ];
 
-  const crossingFill = new THREE.PointLight(
-    LIGHT.crossingFill,
-    LIGHT.crossingFillIntensity,
-    LIGHT.crossingFillDistance,
-    1.65
-  );
-  crossingFill.name = 'light:crossing-sky-fill';
-  crossingFill.position.set(0, 7.8, L.railZ);
-  crossingFill.castShadow = false;
+  // A couple of fixed blossom returns under hero canopies. Not every tree gets
+  // a light: the goal is colour echo, not turning the avenue into pink neon.
+  const blossom = [
+    addPoint(group, {
+      name: 'light:blossom-mid',
+      color: LIGHT.blossomBounce,
+      intensity: 1.25,
+      distance: 8.5,
+      position: [-5.2, 2.7, -13.8],
+    }),
+    addPoint(group, {
+      name: 'light:blossom-crossing',
+      color: LIGHT.blossomBounce,
+      intensity: 1.15,
+      distance: 8.0,
+      position: [5.1, 2.7, 25.8],
+    }),
+  ];
 
-  const groundBounce = new THREE.PointLight(
-    LIGHT.groundBounce, 0, LIGHT.groundBounceDistance, 2.0
-  );
-  groundBounce.name = 'light:ground-bounce';
-  groundBounce.castShadow = false;
+  // The railway crossing is genuinely more open to the sky than the narrow
+  // residential corridor. This fixed cool pocket reinforces that geography.
+  const crossingFill = addPoint(group, {
+    name: 'light:crossing-sky-fill',
+    color: LIGHT.crossingFill,
+    intensity: 2.6,
+    distance: 24,
+    position: [0, 7.2, L.railZ],
+    decay: 2,
+  });
 
-  scene.add(facadeBounce, blossomBounce, crossingFill, groundBounce);
-
-  const facadeTarget = new THREE.Vector3();
-  const blossomTarget = new THREE.Vector3();
-  const groundTarget = new THREE.Vector3();
-  let facadeLevel = 0;
-  let blossomLevel = 0;
-  let groundLevel = 0;
-
-  function update(dt, camera) {
-    const p = camera.position;
-    const follow = 1 - Math.exp(-dt * 7.0);
-    const intensityFollow = 1 - Math.exp(-dt * 5.0);
-
-    // Facade colour return only wakes up near the shopfronts. The centre lane
-    // deliberately stays under the original sun/hemi/ambient composition.
-    const edge = smooth01(2.65, L.walkLimit, Math.abs(p.x));
-    const side = p.x >= 0 ? 1 : -1;
-    facadeTarget.set(side * (L.buildLine - 0.1), 2.25, p.z + 0.25);
-    facadeBounce.position.lerp(facadeTarget, follow);
-    const facadeTargetLevel = LIGHT.facadeBounceIntensity * edge;
-    facadeLevel += (facadeTargetLevel - facadeLevel) * intensityFollow;
-    facadeBounce.intensity = facadeLevel;
-
-    // Cherry bounce remains local to the nearest canopy and fades before it can
-    // wash an entire block pink.
-    let nearest = STREET_CANOPIES[0];
-    let nearestD2 = Infinity;
-    for (const c of STREET_CANOPIES) {
-      const dx = p.x - c[0];
-      const dz = p.z - c[1];
-      const d2 = dx * dx + dz * dz;
-      if (d2 < nearestD2) {
-        nearestD2 = d2;
-        nearest = c;
-      }
-    }
-
-    const nearestD = Math.sqrt(nearestD2);
-    const canopy = 1 - smooth01(4.0, 10.5, nearestD);
-    blossomTarget.set(nearest[0] * 0.82, 3.45, nearest[1]);
-    blossomBounce.position.lerp(blossomTarget, follow);
-    const blossomTargetLevel = LIGHT.blossomBounceIntensity * canopy;
-    blossomLevel += (blossomTargetLevel - blossomLevel) * intensityFollow;
-    blossomBounce.intensity = blossomLevel;
-
-    // Ground return is now a small local lift, strongest near the road centre
-    // and disabled around the crossing so it cannot flatten the open-sky read.
-    const crossingDistance = Math.abs(p.z - L.railZ);
-    const residential = smooth01(7.0, 18.0, crossingDistance);
-    const roadCentre = 1.0 - smooth01(2.2, 3.8, Math.abs(p.x));
-    groundTarget.set(p.x * 0.2, 0.12, p.z - 0.45);
-    groundBounce.position.lerp(groundTarget, follow);
-    const groundTargetLevel = LIGHT.groundBounceIntensity * roadCentre * residential;
-    groundLevel += (groundTargetLevel - groundLevel) * intensityFollow;
-    groundBounce.intensity = groundLevel;
-
-    // Crossing fill ramps only in the final approach. Farther away it is almost
-    // dormant, so the residential street retains its original value structure.
-    const crossingPresence = 1 - smooth01(10.0, 25.0, crossingDistance);
-    crossingFill.intensity = LIGHT.crossingFillIntensity * (0.10 + crossingPresence * 0.90);
-  }
+  scene.add(group);
 
   return {
-    facadeBounce,
-    blossomBounce,
+    group,
+    facade,
+    blossom,
     crossingFill,
-    groundBounce,
-    update,
   };
 }
