@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { LIGHT } from '../core/palette.js';
 import { L } from './layout.js';
+import { createDappleRig } from './dapple.js';
 
 /**
  * Spatial, world-anchored secondary lighting.
@@ -97,6 +98,11 @@ export function createLightingRig(scene) {
     decay: 2,
   });
 
+  // Dapple is geometry, not another full-screen effect. It lives in the same
+  // fixed world-space rig and only animates its tiny procedural branch drift.
+  const dapple = createDappleRig();
+  group.add(dapple.group);
+
   scene.add(group);
 
   return {
@@ -104,5 +110,10 @@ export function createLightingRig(scene) {
     facade,
     blossom,
     crossingFill,
+    dapple,
+    inkExclude: dapple.inkExclude,
+    update(dt) {
+      dapple.update(dt);
+    },
   };
 }
