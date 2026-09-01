@@ -6,9 +6,8 @@ import { L } from './layout.js';
  * Painterly secondary lighting that adds readable spatial depth without
  * replacing the authored cel-shaded key light.
  *
- * The rule is simple: these lights may change how a place feels, but they may
- * not become physically believable light sources. They stay broad, shadowless,
- * palette-bound and slow-moving so the street still reads like an anime plate.
+ * These are local colour washes, not extra suns. Keep their falloff tight and
+ * their activation contextual so they add depth without clipping the palette.
  */
 
 const STREET_CANOPIES = [
@@ -24,13 +23,13 @@ function smooth01(edge0, edge1, x) {
 
 export function createLightingRig(scene) {
   const facadeBounce = new THREE.PointLight(
-    LIGHT.facadeBounce, 0, LIGHT.facadeBounceDistance, 1.45
+    LIGHT.facadeBounce, 0, LIGHT.facadeBounceDistance, 1.75
   );
   facadeBounce.name = 'light:facade-bounce';
   facadeBounce.castShadow = false;
 
   const blossomBounce = new THREE.PointLight(
-    LIGHT.blossomBounce, 0, LIGHT.blossomBounceDistance, 1.5
+    LIGHT.blossomBounce, 0, LIGHT.blossomBounceDistance, 1.8
   );
   blossomBounce.name = 'light:blossom-bounce';
   blossomBounce.castShadow = false;
@@ -39,17 +38,14 @@ export function createLightingRig(scene) {
     LIGHT.crossingFill,
     LIGHT.crossingFillIntensity,
     LIGHT.crossingFillDistance,
-    1.35
+    1.65
   );
   crossingFill.name = 'light:crossing-sky-fill';
-  crossingFill.position.set(0, 7.4, L.railZ);
+  crossingFill.position.set(0, 7.8, L.railZ);
   crossingFill.castShadow = false;
 
-  // A low warm return that follows the player and only becomes visible where
-  // the road is sunlit enough to plausibly kick colour back upward. This is the
-  // missing "ground bounce" layer that stops lower walls / props feeling flat.
   const groundBounce = new THREE.PointLight(
-    LIGHT.groundBounce, 0, LIGHT.groundBounceDistance, 1.5
+    LIGHT.groundBounce, 0, LIGHT.groundBounceDistance, 2.0
   );
   groundBounce.name = 'light:ground-bounce';
   groundBounce.castShadow = false;
@@ -65,23 +61,21 @@ export function createLightingRig(scene) {
 
   function update(dt, camera) {
     const p = camera.position;
-    const follow = 1 - Math.exp(-dt * 8.0);
-    const intensityFollow = 1 - Math.exp(-dt * 6.0);
+    const follow = 1 - Math.exp(-dt * 7.0);
+    const intensityFollow = 1 - Math.exp(-dt * 5.0);
 
-    // ---- facade bounce ----------------------------------------------------
-    // Wider activation than before: starts in the road lane, then ramps hard
-    // as the player approaches the shopfronts. The visible change is local,
-    // not a global grade shift.
-    const edge = smooth01(1.55, L.walkLimit, Math.abs(p.x));
+    // Facade colour return only wakes up near the shopfronts. The centre lane
+    // deliberately stays under the original sun/hemi/ambient composition.
+    const edge = smooth01(2.65, L.walkLimit, Math.abs(p.x));
     const side = p.x >= 0 ? 1 : -1;
-    facadeTarget.set(side * (L.buildLine - 0.25), 2.0, p.z + 0.4);
+    facadeTarget.set(side * (L.buildLine - 0.1), 2.25, p.z + 0.25);
     facadeBounce.position.lerp(facadeTarget, follow);
-
     const facadeTargetLevel = LIGHT.facadeBounceIntensity * edge;
     facadeLevel += (facadeTargetLevel - facadeLevel) * intensityFollow;
     facadeBounce.intensity = facadeLevel;
 
-    // ---- blossom bounce ---------------------------------------------------
+    // Cherry bounce remains local to the nearest canopy and fades before it can
+    // wash an entire block pink.
     let nearest = STREET_CANOPIES[0];
     let nearestD2 = Infinity;
     for (const c of STREET_CANOPIES) {
@@ -95,33 +89,28 @@ export function createLightingRig(scene) {
     }
 
     const nearestD = Math.sqrt(nearestD2);
-    const canopy = 1 - smooth01(4.2, 13.5, nearestD);
-    blossomTarget.set(nearest[0] * 0.82, 3.2, nearest[1]);
+    const canopy = 1 - smooth01(4.0, 10.5, nearestD);
+    blossomTarget.set(nearest[0] * 0.82, 3.45, nearest[1]);
     blossomBounce.position.lerp(blossomTarget, follow);
-
     const blossomTargetLevel = LIGHT.blossomBounceIntensity * canopy;
     blossomLevel += (blossomTargetLevel - blossomLevel) * intensityFollow;
     blossomBounce.intensity = blossomLevel;
 
-    // ---- ground bounce ----------------------------------------------------
-    // Strongest down the residential stretch, eased out at the crossing where
-    // the cool open-sky pocket should dominate instead.
+    // Ground return is now a small local lift, strongest near the road centre
+    // and disabled around the crossing so it cannot flatten the open-sky read.
     const crossingDistance = Math.abs(p.z - L.railZ);
-    const residential = smooth01(4.0, 16.0, crossingDistance);
-    const roadCentre = 1.0 - smooth01(2.8, L.walkLimit + 0.4, Math.abs(p.x));
-    groundTarget.set(p.x * 0.35, 0.18, p.z - 0.8);
+    const residential = smooth01(7.0, 18.0, crossingDistance);
+    const roadCentre = 1.0 - smooth01(2.2, 3.8, Math.abs(p.x));
+    groundTarget.set(p.x * 0.2, 0.12, p.z - 0.45);
     groundBounce.position.lerp(groundTarget, follow);
-
-    const groundTargetLevel = LIGHT.groundBounceIntensity
-      * (0.45 + roadCentre * 0.55)
-      * residential;
+    const groundTargetLevel = LIGHT.groundBounceIntensity * roadCentre * residential;
     groundLevel += (groundTargetLevel - groundLevel) * intensityFollow;
     groundBounce.intensity = groundLevel;
 
-    // Let the open crossing breathe harder than the residential corridor.
-    // The light itself stays fixed; only its strength ramps as you approach.
-    const crossingPresence = 1 - smooth01(12.0, 34.0, crossingDistance);
-    crossingFill.intensity = LIGHT.crossingFillIntensity * (0.35 + crossingPresence * 0.65);
+    // Crossing fill ramps only in the final approach. Farther away it is almost
+    // dormant, so the residential street retains its original value structure.
+    const crossingPresence = 1 - smooth01(10.0, 25.0, crossingDistance);
+    crossingFill.intensity = LIGHT.crossingFillIntensity * (0.10 + crossingPresence * 0.90);
   }
 
   return {
