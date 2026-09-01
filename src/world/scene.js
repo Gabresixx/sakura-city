@@ -7,6 +7,7 @@ import { createTrain } from './train.js';
 import { buildBuildings } from './buildings.js';
 import { buildSakura, createPetals } from './sakura.js';
 import { buildProps } from './props.js';
+import { createLightingRig } from './lighting.js';
 import { L, onTracks } from './layout.js';
 
 const FOG = { color: 0xe9e2ee, near: 52, far: 215 };
@@ -51,6 +52,10 @@ export function buildWorld() {
   const sky = createSky(sunPos);
   scene.add(sky);
 
+  // Secondary light lives in fixed world-space zones. None of it follows the
+  // player; walking through the scene changes which zone you occupy.
+  const lighting = createLightingRig(scene);
+
   // ---- geometry -----------------------------------------------------------
   const timed = (label, fn) => {
     const t = performance.now();
@@ -94,6 +99,8 @@ export function buildWorld() {
   ];
 
   // ---- shadow follow ------------------------------------------------------
+  // Only the *shadow camera* follows the player. The sun direction stays fixed
+  // in world space and remains exactly aligned with the painted sky.
   const sunDir = sunPos.clone().normalize();
   const texel = (EXTENT * 2) / 2048;
   function trackShadow(focus) {
@@ -107,11 +114,11 @@ export function buildWorld() {
   }
 
   return {
-    scene, sky, crossing, petals, trains, sun,
+    scene, sky, crossing, petals, trains, sun, sunDirection: sunDir, lighting,
     colliders: { circles, boxes },
     trackShadow,
     /** Objects the ink pass must not see — they have no meaningful normals. */
-    inkExclude: [sky, petals.mesh, backdrop],
+    inkExclude: [sky, petals.mesh, backdrop, ...(lighting.inkExclude ?? [])],
   };
 }
 
@@ -178,6 +185,11 @@ export class Director {
   /** Advance whatever is already running: trains, audio, and the crossing. */
   _step(dt, camera) {
     const { crossing, trains } = this.world;
+
+    // Dapple animation is world-time only. No camera/player position is passed,
+    // so the lighting cannot follow the player; only the faux branch pattern
+    // drifts slowly inside its fixed world-space patches.
+    this.world.lighting?.update?.(dt);
 
     // The crossing stays armed while any train is inbound or still clearing.
     let blocking = false;

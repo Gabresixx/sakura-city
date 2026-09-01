@@ -6,6 +6,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { RevealPass } from './reveal.js';
+import { SunShaftPass } from './sunshafts.js';
 
 /**
  * The ink pass.
@@ -16,12 +17,11 @@ import { RevealPass } from './reveal.js';
  * a Roberts cross over *both* finds silhouette edges (depth) and crease edges
  * (normal) in one go.
  *
- * Two details do most of the work:
- *   - the depth threshold is anchored to the *nearest* of the sampled depths,
- *     not the centre pixel, so a silhouette against the sky reads as an edge
- *     belonging to the near object
- *   - the threshold is divided by how edge-on the surface is, which is what
- *     stops the road from turning into a solid black wash toward the horizon
+ * The same depth buffer also carries a restrained contact wash. It is not
+ * photoreal SSAO: it only darkens the tiny screen-space pockets where nearby
+ * geometry overlaps, using the scene's violet shadow family instead of black.
+ * That makes props sit on the pavement and roofs sit on walls without dirtying
+ * the flat painted areas that define the art direction.
  */
 class InkPass extends Pass {
   constructor(scene, camera, options = {}) {
@@ -44,6 +44,7 @@ class InkPass extends Pass {
     this._clearColor = new THREE.Color();
 
     const ink = new THREE.Color(options.ink ?? 0x2a2333).convertSRGBToLinear();
+    const contactTint = new THREE.Color(options.contactTint ?? 0xb9b3ca).convertSRGBToLinear();
 
     this.material = new THREE.ShaderMaterial({
       uniforms: {
@@ -59,6 +60,11 @@ class InkPass extends Pass {
         uStrength: { value: options.strength ?? 0.92 },
         uFadeStart: { value: options.fadeStart ?? 46 },
         uFadeEnd: { value: options.fadeEnd ?? 132 },
+        uContactTint: { value: contactTint },
+        uContactStrength: { value: options.contactStrength ?? 0.16 },
+        uContactRadius: { value: options.contactRadius ?? 2.35 },
+        uContactFadeStart: { value: options.contactFadeStart ?? 8 },
+        uContactFadeEnd: { value: options.contactFadeEnd ?? 92 },
         uNear: { value: camera.near },
         uFar: { value: camera.far },
       },
@@ -86,6 +92,11 @@ class InkPass extends Pass {
 				uniform float uStrength;
 				uniform float uFadeStart;
 				uniform float uFadeEnd;
+				uniform vec3 uContactTint;
+				uniform float uContactStrength;
+				uniform float uContactRadius;
+				uniform float uContactFadeStart;
+				uniform float uContactFadeEnd;
 				uniform float uNear;
 				uniform float uFar;
 
@@ -96,6 +107,19 @@ class InkPass extends Pass {
 
 				vec3 viewNormal( vec2 uv ) {
 					return texture2D( tNormal, uv ).xyz * 2.0 - 1.0;
+				}
+
+				float contactSample( vec2 uv, float centre ) {
+					float sampleDepth = eyeDepth( clamp( uv, vec2( 0.0 ), vec2( 1.0 ) ) );
+					float delta = centre - sampleDepth;
+
+					// Only accept a small nearby depth step. Large steps are silhouettes
+					// and belong to the ink line, not to the contact wash.
+					float bias = 0.012 + centre * 0.0009;
+					float reach = 0.16 + centre * 0.0050;
+					float enter = smoothstep( bias, bias * 2.6, delta );
+					float leave = 1.0 - smoothstep( reach, reach * 2.0, delta );
+					return enter * leave;
 				}
 
 				void main() {
@@ -110,6 +134,19 @@ class InkPass extends Pass {
 					float da = eyeDepth( a ), db = eyeDepth( b );
 					float dc = eyeDepth( c ), dd = eyeDepth( d );
 					float d0 = eyeDepth( vUv );
+
+					// Painterly contact wash. Four cardinal taps are enough to ground
+					// nearby intersections, and they reuse the depth render this pass
+					// already needed for outlines.
+					vec2 co = uTexel * uContactRadius;
+					float contact = 0.0;
+					contact += contactSample( vUv + vec2(  co.x, 0.0 ), d0 );
+					contact += contactSample( vUv + vec2( -co.x, 0.0 ), d0 );
+					contact += contactSample( vUv + vec2( 0.0,  co.y ), d0 );
+					contact += contactSample( vUv + vec2( 0.0, -co.y ), d0 );
+					contact *= 0.25;
+					contact *= 1.0 - smoothstep( uContactFadeStart, uContactFadeEnd, d0 );
+					base = mix( base, base * uContactTint, contact * uContactStrength );
 
 					// Anchor to whichever sample is closest: the line belongs to the
 					// near surface, not to the far one behind it.
@@ -264,6 +301,12 @@ export function createComposer(renderer, scene, camera) {
   const ink = new InkPass(scene, camera);
   composer.addPass(ink);
 
+  // Dynamic depth-aware shafts reuse the exact depth texture generated above.
+  // No extra scene render is needed: branches, wires, poles and buildings cut
+  // the scattering pattern as the camera moves.
+  const shafts = new SunShaftPass(camera, ink.normalRT.depthTexture);
+  composer.addPass(shafts);
+
   // Threshold sits above 1.0 on purpose: only things that genuinely emit —
   // vending machines, crossing lamps, headlights — are allowed to bloom. A
   // lower threshold catches the sky and smears the whole plate.
@@ -281,5 +324,5 @@ export function createComposer(renderer, scene, camera) {
   const reveal = new RevealPass();
   composer.addPass(reveal);
 
-  return { composer, ink, bloom, grade, reveal };
+  return { composer, ink, shafts, bloom, grade, reveal };
 }
