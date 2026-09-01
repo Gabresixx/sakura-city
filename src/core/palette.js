@@ -19,6 +19,20 @@ export const LIGHT = {
   hemiIntensity: 0.55,
   ambient: 0xb2adcd,
   ambientIntensity: 0.36,
+
+  // Secondary painterly fills. These do not replace the cel key; they are
+  // deliberately low-frequency colour washes that give the street spatial
+  // depth while preserving the same stylised palette.
+  facadeBounce: 0xffd9c2,
+  facadeBounceIntensity: 5.8,
+  facadeBounceDistance: 10.5,
+  blossomBounce: 0xffbfd5,
+  blossomBounceIntensity: 4.2,
+  blossomBounceDistance: 12.5,
+  crossingFill: 0xd8e9ff,
+  crossingFillIntensity: 6.2,
+  crossingFillDistance: 22,
+
   // ~64° up, from over the west rooftops. Elevation matters more than it
   // sounds: this street is 6m wide between 6m buildings, so anything below
   // about 60° puts most of the road in permanent shade and the dappling from
@@ -72,7 +86,7 @@ export const C = {
   rail: 0xb6b3bd,
   railSide: 0x7c7480,
   crossingDeck: 0xb9b6c0,
-  barrierYellow: 0xf5c93c,
+  barrierYellow: 0xf5c93f,
   barrierBlack: 0x2f2b33,
   signalRed: 0xff4b42,
   signalBody: 0x37333d,
