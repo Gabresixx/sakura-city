@@ -20,18 +20,21 @@ export const LIGHT = {
   ambient: 0xb2adcd,
   ambientIntensity: 0.36,
 
-  // Secondary painterly fills. These do not replace the cel key; they are
-  // deliberately low-frequency colour washes that give the street spatial
-  // depth while preserving the same stylised palette.
-  facadeBounce: 0xffd9c2,
-  facadeBounceIntensity: 5.8,
-  facadeBounceDistance: 10.5,
-  blossomBounce: 0xffbfd5,
-  blossomBounceIntensity: 4.2,
-  blossomBounceDistance: 12.5,
-  crossingFill: 0xd8e9ff,
-  crossingFillIntensity: 6.2,
-  crossingFillDistance: 22,
+  // Secondary painterly fills. They are intentionally strong enough to be
+  // *read* while walking, but remain broad and shadowless so they still behave
+  // like painted colour fields rather than extra realistic light sources.
+  facadeBounce: 0xffcfad,
+  facadeBounceIntensity: 28,
+  facadeBounceDistance: 13,
+  blossomBounce: 0xffa8c8,
+  blossomBounceIntensity: 18,
+  blossomBounceDistance: 14,
+  crossingFill: 0xcfe4ff,
+  crossingFillIntensity: 30,
+  crossingFillDistance: 28,
+  groundBounce: 0xffdfbd,
+  groundBounceIntensity: 13,
+  groundBounceDistance: 11,
 
   // ~64° up, from over the west rooftops. Elevation matters more than it
   // sounds: this street is 6m wide between 6m buildings, so anything below
