@@ -118,7 +118,7 @@ export function buildWorld() {
     colliders: { circles, boxes },
     trackShadow,
     /** Objects the ink pass must not see — they have no meaningful normals. */
-    inkExclude: [sky, petals.mesh, backdrop],
+    inkExclude: [sky, petals.mesh, backdrop, ...(lighting.inkExclude ?? [])],
   };
 }
 
@@ -185,6 +185,11 @@ export class Director {
   /** Advance whatever is already running: trains, audio, and the crossing. */
   _step(dt, camera) {
     const { crossing, trains } = this.world;
+
+    // Dapple animation is world-time only. No camera/player position is passed,
+    // so the lighting cannot follow the player; only the faux branch pattern
+    // drifts slowly inside its fixed world-space patches.
+    this.world.lighting?.update?.(dt);
 
     // The crossing stays armed while any train is inbound or still clearing.
     let blocking = false;
